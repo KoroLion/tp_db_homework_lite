@@ -107,13 +107,13 @@ func ForumUsers(c echo.Context) error {
             forum_id = $1
             AND
             (
-                CASE WHEN $3 THEN nickname < $4 ELSE nickname > $4 END
+                CASE WHEN $3 THEN LOWER(nickname) < LOWER($4) ELSE LOWER(nickname) > LOWER($4) END
                 OR
                 LENGTH($4) = 0
             )
         ORDER BY
-            CASE WHEN $3 THEN nickname END DESC,
-            nickname ASC
+            CASE WHEN $3 THEN LOWER(nickname) END DESC,
+            LOWER(nickname) ASC
         LIMIT $2`,
         forumId, limit, desc, since,
     )
