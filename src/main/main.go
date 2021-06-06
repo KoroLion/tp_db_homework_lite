@@ -67,7 +67,7 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	go func() {
-		err := e.Start(":5000")
+		err := e.Start("127.0.0.1:5000")
 		if err != nil {
 			log.Println("Server was shut down with no errors!")
 		} else {

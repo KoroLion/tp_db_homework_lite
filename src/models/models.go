@@ -40,7 +40,7 @@ type Thread struct {
 	Author  string `json:"author"`
 	Message string `json:"message"`
 	Created time.Time `json:"created"`
-	Votes   int    `json:"votes"`
+	Votes   int64    `json:"votes"`
 	Slug    string `json:"slug"`
 }
 
@@ -75,5 +75,5 @@ type ThreadVote struct {
 	Id int `json:"id"`
 	Thread int `json:"thread"`
 	Nickname string `json:"nickname"`
-	Voice int `json:"voice"`
+	Voice int64 `json:"voice"`
 }

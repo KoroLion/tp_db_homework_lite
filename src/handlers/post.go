@@ -5,7 +5,6 @@ import (
     "strconv"
     "net/http"
     "encoding/json"
-    "log"
     "strings"
 
     "github.com/labstack/echo/v4"
@@ -208,7 +207,6 @@ func PostList(c echo.Context) error {
         )
     }
     if err != nil {
-        log.Println(err)
         return echo.NewHTTPError(http.StatusNotFound, err.Error())
     }
     defer rows.Close()

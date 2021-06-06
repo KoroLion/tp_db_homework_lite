@@ -29,7 +29,6 @@ func ForumCreate(c echo.Context) error {
         newForum.User,
     ).Scan(&newForum.User)
     if err != nil {
-        log.Println(err)
         return echo.NewHTTPError(http.StatusNotFound, "User not found!")
     }
 
@@ -64,7 +63,6 @@ func ForumDetails(c echo.Context) error {
         forum.Slug,
     ).Scan(&forum.Slug, &forum.Title, &forum.User, &forum.Threads, &forum.Posts)
     if err != nil {
-        log.Println(err)
         return echo.NewHTTPError(http.StatusNotFound, "Forum not found")
     }
 
@@ -73,7 +71,6 @@ func ForumDetails(c echo.Context) error {
         forum.Slug,
     ).Scan(&forum.Posts)
     if err != nil {
-        log.Println(err)
         return echo.NewHTTPError(http.StatusNotFound, "Forum not found")
     }
 
@@ -124,7 +121,6 @@ func ForumUsers(c echo.Context) error {
         forumId, limit, desc, since,
     )
     if err != nil {
-        log.Println(err)
         return echo.NewHTTPError(http.StatusNotFound, err.Error())
     }
     defer rows.Close()

@@ -32,7 +32,6 @@ func ThreadCreate(c echo.Context) error {
         newThread.Author,
     ).Scan(&authorId, &newThread.Author)
     if err != nil {
-        log.Println(err)
         return echo.NewHTTPError(http.StatusNotFound, "User not found!")
     }
 
@@ -54,7 +53,6 @@ func ThreadCreate(c echo.Context) error {
         newThread.Forum,
     ).Scan(&forumId, &newThread.Forum)
     if err != nil {
-        log.Println(err)
         return echo.NewHTTPError(http.StatusNotFound, "Forum was not found!")
     }
 
@@ -154,32 +152,33 @@ func ThreadVote(c echo.Context) error {
         return echo.NewHTTPError(http.StatusBadRequest, err.Error())
     }
 
+    var userId int64
     err = db.QueryRow(context.Background(), `
-        SELECT nickname FROM users WHERE nickname = $1`,
+        SELECT id, nickname FROM users WHERE nickname = $1`,
         thrVote.Nickname,
-    ).Scan(&thrVote.Nickname)
+    ).Scan(&userId, &thrVote.Nickname)
     if err != nil {
         return echo.NewHTTPError(http.StatusNotFound, err.Error())
     }
 
-    var prevVoice int
+    var prevVoice int64
     err = db.QueryRow(context.Background(), `
-        SELECT voice FROM thread_votes WHERE thread = $1 AND nickname = $2`,
-        thr.Id, thrVote.Nickname,
+        SELECT voice FROM thread_votes WHERE thread_id = $1 AND user_id = $2`,
+        thr.Id, userId,
     ).Scan(&prevVoice)
     if err != nil {
         prevVoice = 0
         _, err := db.Exec(context.Background(), `
-            INSERT INTO thread_votes (thread, nickname, voice) VALUES ($1, $2, $3)`,
-            thr.Id, thrVote.Nickname, thrVote.Voice,
+            INSERT INTO thread_votes (thread_id, user_id, voice) VALUES ($1, $2, $3)`,
+            thr.Id, userId, thrVote.Voice,
         )
         if err != nil {
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
         }
     } else if prevVoice != thrVote.Voice {
         _, err := db.Exec(context.Background(), `
-            UPDATE thread_votes SET voice = $3 WHERE thread = $1 AND nickname = $2`,
-            thr.Id, thrVote.Nickname, thrVote.Voice,
+            UPDATE thread_votes SET voice = $3 WHERE thread_id = $1 AND user_id = $2`,
+            thr.Id, userId, thrVote.Voice,
         )
         if err != nil {
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -217,6 +216,15 @@ func ThreadDetails(c echo.Context) error {
     if err != nil {
         return echo.NewHTTPError(http.StatusNotFound, err.Error())
     }
+
+    /*err = db.QueryRow(context.Background(), `
+        SELECT SUM(voice) FROM thread_votes WHERE thread_id = $1;`,
+        threadId,
+    ).Scan(&thr.Votes)
+    if err != nil {
+        thr.Votes = 0
+    }*/
+
     return c.JSON(http.StatusOK, thr)
 }
 
