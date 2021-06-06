@@ -1,16 +1,17 @@
 package utils
 
 import (
-	"database/sql"
+	"context"
     _ "github.com/lib/pq"
 	"github.com/labstack/echo/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
     "fmt"
     "time"
 )
 
 type ContextAndDb struct {
 	echo.Context
-	DB *sql.DB
+	DB *pgxpool.Pool
 }
 
 func StringInList(s string, list []string) bool {
@@ -31,15 +32,16 @@ func GetSpecialDate(max bool) time.Time {
     }
 }
 
-func PostgresConnect(host string, port int, db_name string, username string, password string) (*sql.DB, error) {
+func PostgresConnect(host string, port int, db_name string, username string, password string) (*pgxpool.Pool, error) {
     fmt.Println("Connecting to the database!")
     dsn := fmt.Sprintf("user=%s password=%s host=%s port=%d dbname=%s sslmode=disable", username, password, host, port, db_name)
-	db, err := sql.Open("postgres", dsn)
+
+	db, err := pgxpool.Connect(context.Background(), dsn)
 	if err != nil {
 		return nil, err
 	}
 
-	err = db.Ping()
+	err = db.Ping(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -47,19 +49,18 @@ func PostgresConnect(host string, port int, db_name string, username string, pas
 	return db, nil
 }
 
-func ClearTables(db *sql.DB) error {
-	rows, err := db.Query(`
+func ClearTables(db *pgxpool.Pool) error {
+	_, err := db.Exec(context.Background(), `
 		DELETE FROM users;
 		DELETE FROM forums;
 		DELETE FROM threads;
 		DELETE FROM posts;
     `)
-	rows.Close()
 	return err
 }
 
-func ClearDB(db *sql.DB) error {
-	rows, err := db.Query(`
+func ClearDB(db *pgxpool.Pool) error {
+	_, err := db.Exec(context.Background(), `
 		DROP TABLE IF EXISTS users;
 		DROP TABLE IF EXISTS forums;
 		DROP TABLE IF EXISTS forum_users;
@@ -69,12 +70,12 @@ func ClearDB(db *sql.DB) error {
 
 		DROP TRIGGER IF EXISTS posts_path ON posts;
     `)
-	rows.Close()
+
     return err
 }
 
-func CreateTables(db *sql.DB) error {
-	rows, err := db.Query(`
+func CreateTables(db *pgxpool.Pool) error {
+	_, err := db.Exec(context.Background(), `
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
             nickname VARCHAR(255) UNIQUE,
@@ -142,6 +143,6 @@ func CreateTables(db *sql.DB) error {
 			FOR EACH ROW
 			EXECUTE PROCEDURE update_path();
     `)
-	rows.Close()
+
     return err
 }

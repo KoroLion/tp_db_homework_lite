@@ -1,7 +1,7 @@
 FROM golang
 WORKDIR /go/src/app
 COPY . .
-RUN go build src/main.go
+RUN go build tp_db_homework/src/main
 
 FROM ubuntu:20.04
 COPY --from=0 /go/src/app/main ./

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+    "context"
     "log"
     "net/http"
     "encoding/json"
@@ -26,7 +27,7 @@ func UserCreate(c echo.Context) error {
     }
 
     oldUsers := make([]models.User, 0)
-    rows1, err := db.Query(`
+    rows1, err := db.Query(context.Background(), `
         SELECT nickname, fullname, about, email FROM users WHERE LOWER(nickname) = LOWER($1) OR LOWER(email) = LOWER($2)`,
         newUser.Nickname, newUser.Email,
     )
@@ -50,7 +51,7 @@ func UserCreate(c echo.Context) error {
         return c.JSON(409, oldUsers)
     }
 
-    _, err = db.Exec(`
+    _, err = db.Exec(context.Background(), `
         INSERT INTO users (nickname, fullname, about, email) VALUES ($1, $2, $3, $4)`,
         newUser.Nickname, newUser.Fullname, newUser.About, newUser.Email,
     )
@@ -68,7 +69,7 @@ func UserDetails(c echo.Context) error {
     nickname := c.Param("nickname")
 
     user := models.User{}
-    err := db.QueryRow(`
+    err := db.QueryRow(context.Background(), `
         SELECT nickname, fullname, about, email FROM users WHERE LOWER(nickname) = LOWER($1)`,
         nickname,
     ).Scan(&user.Nickname, &user.Fullname, &user.About, &user.Email)
@@ -85,7 +86,7 @@ func UserUpdate(c echo.Context) error {
     nickname := c.Param("nickname")
 
     var count int
-    err := db.QueryRow(`
+    err := db.QueryRow(context.Background(), `
         SELECT COUNT(*) FROM users WHERE LOWER(nickname) = LOWER($1)`,
         nickname,
     ).Scan(&count)
@@ -105,7 +106,7 @@ func UserUpdate(c echo.Context) error {
         return echo.NewHTTPError(http.StatusBadRequest, err.Error())
     }
 
-    err = db.QueryRow(`
+    err = db.QueryRow(context.Background(), `
         SELECT COUNT(*) FROM users WHERE LOWER(email) = LOWER($1)`,
         updatedUser.Email,
     ).Scan(&count)
@@ -118,7 +119,7 @@ func UserUpdate(c echo.Context) error {
     }
 
     user := models.User{}
-    err = db.QueryRow(`
+    err = db.QueryRow(context.Background(), `
         UPDATE users SET fullname = COALESCE($2, fullname), about = COALESCE($3, about), email = COALESCE($4, email)
         WHERE LOWER(nickname) = LOWER($1)
         RETURNING nickname, fullname, about, email`,

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+    "context"
     "strconv"
     "net/http"
     "encoding/json"
@@ -26,7 +27,7 @@ func ThreadCreate(c echo.Context) error {
     }
 
     var authorId int
-    err = db.QueryRow(`
+    err = db.QueryRow(context.Background(), `
         SELECT id, nickname FROM users WHERE LOWER(nickname) = LOWER($1)`,
         newThread.Author,
     ).Scan(&authorId, &newThread.Author)
@@ -37,7 +38,7 @@ func ThreadCreate(c echo.Context) error {
 
     if len(newThread.Slug) > 0 {
         var oldThread models.Thread
-        err = db.QueryRow(`
+        err = db.QueryRow(context.Background(), `
             SELECT id, author, created, forum, message, slug, title FROM threads WHERE LOWER(slug) = LOWER($1)`,
             newThread.Slug,
         ).Scan(&oldThread.Id, &oldThread.Author, &oldThread.Created, &oldThread.Forum, &oldThread.Message, &oldThread.Slug, &oldThread.Title)
@@ -47,7 +48,7 @@ func ThreadCreate(c echo.Context) error {
     }
 
     var forumId int
-    err = db.QueryRow(`
+    err = db.QueryRow(context.Background(), `
         UPDATE forums SET threads = threads + 1 WHERE LOWER(slug) = LOWER($1)
         RETURNING id, slug`,
         newThread.Forum,
@@ -57,7 +58,7 @@ func ThreadCreate(c echo.Context) error {
         return echo.NewHTTPError(http.StatusNotFound, "Forum was not found!")
     }
 
-    err = db.QueryRow(`
+    err = db.QueryRow(context.Background(), `
         INSERT INTO threads (forum, title, author, message, created, slug) VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id`,
         newThread.Forum, newThread.Title, newThread.Author, newThread.Message, newThread.Created, newThread.Slug,
@@ -67,7 +68,7 @@ func ThreadCreate(c echo.Context) error {
         return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
     }
 
-    db.Exec(`
+    db.Exec(context.Background(), `
         INSERT INTO forum_users (forum_id, user_id) VALUES ($1, $2)`,
         forumId, authorId,
     )
@@ -83,7 +84,7 @@ func ThreadList(c echo.Context) error {
     desc, _ := strconv.ParseBool(c.QueryParam("desc"))
 
     var forumCount int64
-    err := db.QueryRow(`
+    err := db.QueryRow(context.Background(), `
         SELECT COUNT(*) FROM forums WHERE LOWER(slug) = LOWER($1)`,
         forumSlug,
     ).Scan(&forumCount)
@@ -98,7 +99,7 @@ func ThreadList(c echo.Context) error {
     if err != nil {
         since = utils.GetSpecialDate(desc)
     }
-    rows, err := db.Query(`
+    rows, err := db.Query(context.Background(), `
         SELECT author, created, forum, id, message, slug, title FROM threads
         WHERE LOWER(forum) = LOWER($1) AND CASE WHEN $3 THEN created <= $2 ELSE created >= $2 END
         ORDER BY
@@ -136,7 +137,7 @@ func ThreadVote(c echo.Context) error {
     }
 
     thr := models.Thread{}
-    err = db.QueryRow(`
+    err = db.QueryRow(context.Background(), `
         SELECT author, created, forum, id, message, slug, title, votes
         FROM threads
         WHERE LOWER(slug) = LOWER($1) OR id = $2`,
@@ -153,7 +154,7 @@ func ThreadVote(c echo.Context) error {
         return echo.NewHTTPError(http.StatusBadRequest, err.Error())
     }
 
-    err = db.QueryRow(`
+    err = db.QueryRow(context.Background(), `
         SELECT nickname FROM users WHERE LOWER(nickname) = LOWER($1)`,
         thrVote.Nickname,
     ).Scan(&thrVote.Nickname)
@@ -162,13 +163,13 @@ func ThreadVote(c echo.Context) error {
     }
 
     var prevVoice int
-    err = db.QueryRow(`
+    err = db.QueryRow(context.Background(), `
         SELECT voice FROM thread_votes WHERE thread = $1 AND nickname = $2`,
         thr.Id, thrVote.Nickname,
     ).Scan(&prevVoice)
     if err != nil {
         prevVoice = 0
-        _, err := db.Exec(`
+        _, err := db.Exec(context.Background(), `
             INSERT INTO thread_votes (thread, nickname, voice) VALUES ($1, $2, $3)`,
             thr.Id, thrVote.Nickname, thrVote.Voice,
         )
@@ -176,7 +177,7 @@ func ThreadVote(c echo.Context) error {
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
         }
     } else if prevVoice != thrVote.Voice {
-        _, err := db.Exec(`
+        _, err := db.Exec(context.Background(), `
             UPDATE thread_votes SET voice = $3 WHERE thread = $1 AND nickname = $2`,
             thr.Id, thrVote.Nickname, thrVote.Voice,
         )
@@ -187,7 +188,7 @@ func ThreadVote(c echo.Context) error {
 
     if prevVoice != thrVote.Voice {
         thr.Votes += thrVote.Voice - prevVoice
-        _, err = db.Exec(`
+        _, err = db.Exec(context.Background(), `
             UPDATE threads SET votes = $2
             WHERE id = $1`,
             thr.Id, thr.Votes,
@@ -209,7 +210,7 @@ func ThreadDetails(c echo.Context) error {
         threadId = 0
     }
     thr := models.Thread{}
-    err = db.QueryRow(`
+    err = db.QueryRow(context.Background(), `
         SELECT author, created, forum, id, message, slug, title, votes FROM threads WHERE LOWER(slug) = LOWER($1) OR id = $2`,
         threadSlug, threadId,
     ).Scan(&thr.Author, &thr.Created, &thr.Forum, &thr.Id, &thr.Message, &thr.Slug, &thr.Title, &thr.Votes)
@@ -236,7 +237,7 @@ func ThreadUpdate(c echo.Context) error {
     }
 
     thr := models.Thread{}
-    err = db.QueryRow(`
+    err = db.QueryRow(context.Background(), `
         UPDATE threads SET title = COALESCE($3, title), message = COALESCE($4, message)
         WHERE LOWER(slug) = LOWER($1) OR id = $2
         RETURNING author, created, forum, id, message, slug, title, votes`,

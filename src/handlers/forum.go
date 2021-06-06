@@ -1,6 +1,7 @@
 package handlers
 
 import (
+    "context"
     "log"
     "net/http"
     "encoding/json"
@@ -23,8 +24,8 @@ func ForumCreate(c echo.Context) error {
         return echo.NewHTTPError(http.StatusBadRequest, err.Error())
     }
 
-    err = db.QueryRow(
-        "SELECT nickname FROM users WHERE LOWER(nickname) = LOWER($1)",
+    err = db.QueryRow(context.Background(), `
+        SELECT nickname FROM users WHERE LOWER(nickname) = LOWER($1)`,
         newForum.User,
     ).Scan(&newForum.User)
     if err != nil {
@@ -32,12 +33,15 @@ func ForumCreate(c echo.Context) error {
         return echo.NewHTTPError(http.StatusNotFound, "User not found!")
     }
 
-    err = db.QueryRow("SELECT title, user_nickname, slug FROM forums WHERE LOWER(slug) = LOWER($1)", newForum.Slug).Scan(&newForum.Title, &newForum.User, &newForum.Slug)
+    err = db.QueryRow(context.Background(), `
+        SELECT title, user_nickname, slug FROM forums WHERE LOWER(slug) = LOWER($1)`,
+        newForum.Slug,
+    ).Scan(&newForum.Title, &newForum.User, &newForum.Slug)
     if err == nil {
         return c.JSON(409, newForum)
     }
 
-    _, err = db.Exec(`
+    _, err = db.Exec(context.Background(), `
         INSERT INTO forums (title, user_nickname, slug) VALUES ($1, $2, $3)`,
         newForum.Title, newForum.User, newForum.Slug,
     )
@@ -55,7 +59,7 @@ func ForumDetails(c echo.Context) error {
     forum := models.Forum{}
     forum.Slug = c.Param("slug")
 
-    err := db.QueryRow(`
+    err := db.QueryRow(context.Background(), `
         SELECT slug, title, user_nickname, threads, posts FROM forums WHERE LOWER(slug) = LOWER($1)`,
         forum.Slug,
     ).Scan(&forum.Slug, &forum.Title, &forum.User, &forum.Threads, &forum.Posts)
@@ -64,7 +68,7 @@ func ForumDetails(c echo.Context) error {
         return echo.NewHTTPError(http.StatusNotFound, "Forum not found")
     }
 
-    err = db.QueryRow(`
+    err = db.QueryRow(context.Background(), `
         SELECT COUNT(*) FROM posts WHERE LOWER(forum) = LOWER($1)`,
         forum.Slug,
     ).Scan(&forum.Posts)
@@ -93,7 +97,7 @@ func ForumUsers(c echo.Context) error {
     since := c.QueryParam("since")
 
     var forumId int
-    err = db.QueryRow(`
+    err = db.QueryRow(context.Background(), `
         SELECT id FROM forums WHERE LOWER(slug) = LOWER($1)`,
         forumSlug,
     ).Scan(&forumId)
@@ -101,7 +105,7 @@ func ForumUsers(c echo.Context) error {
         return echo.NewHTTPError(http.StatusNotFound, err.Error())
     }
 
-    rows, err := db.Query(`
+    rows, err := db.Query(context.Background(), `
         SELECT about, email, fullname, nickname
         FROM forum_users fu
             INNER JOIN users u ON u.id = fu.user_id

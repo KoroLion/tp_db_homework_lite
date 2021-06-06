@@ -73,7 +73,6 @@ func main() {
 		} else {
 			log.Fatal("Error occured while trying to shut down server: " + err.Error())
 		}
-		db.Close()
 	}()
 	<-quit
 

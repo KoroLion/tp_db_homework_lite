@@ -1,7 +1,7 @@
 package handlers
 
 import (
-    "database/sql"
+    "context"
     "strconv"
     "net/http"
     "encoding/json"
@@ -9,6 +9,7 @@ import (
     "strings"
 
     "github.com/labstack/echo/v4"
+    "github.com/jackc/pgx/v4"
 
     "tp_db_homework/src/models"
     "tp_db_homework/src/utils"
@@ -24,8 +25,8 @@ func PostCreate(c echo.Context) error {
     }
 
     var forumSlug string
-    err = db.QueryRow(
-        `SELECT id, forum FROM threads WHERE LOWER(slug) = LOWER($1) OR id = $2`,
+    err = db.QueryRow(context.Background(), `
+        SELECT id, forum FROM threads WHERE LOWER(slug) = LOWER($1) OR id = $2`,
         threadSlug, threadId,
     ).Scan(&threadId, &forumSlug)
     if err != nil {
@@ -45,8 +46,8 @@ func PostCreate(c echo.Context) error {
         post.Forum = forumSlug
 
         var authorId int
-        err := db.QueryRow(
-            `SELECT id, nickname FROM users WHERE LOWER(nickname) = LOWER($1)`,
+        err := db.QueryRow(context.Background(), `
+            SELECT id, nickname FROM users WHERE LOWER(nickname) = LOWER($1)`,
             post.Author,
         ).Scan(&authorId, &post.Author)
         if err != nil {
@@ -55,8 +56,8 @@ func PostCreate(c echo.Context) error {
 
         if post.Parent != 0 {
             var amount int
-            err := db.QueryRow(
-                `SELECT COUNT(*) FROM posts WHERE id = $1 AND thread = $2`,
+            err := db.QueryRow(context.Background(), `
+                SELECT COUNT(*) FROM posts WHERE id = $1 AND thread = $2`,
                 post.Parent, post.Thread,
             ).Scan(&amount)
             if err != nil || amount == 0 {
@@ -65,7 +66,7 @@ func PostCreate(c echo.Context) error {
         }
 
         var forumId int
-        err = db.QueryRow(`
+        err = db.QueryRow(context.Background(), `
             UPDATE forums SET posts = posts + 1 WHERE LOWER(slug) = LOWER($1)
             RETURNING id`,
             post.Forum,
@@ -74,17 +75,17 @@ func PostCreate(c echo.Context) error {
             return echo.NewHTTPError(http.StatusNotFound, "Forum was not found!")
         }
 
-        err = db.QueryRow(
-            `INSERT INTO posts (author, message, thread, forum, parent, created)
+        err = db.QueryRow(context.Background(), `
+            INSERT INTO posts (author, message, thread, forum, parent, created)
                 VALUES ($1, $2, $3, $4, $5, $6)
-             RETURNING id`,
+            RETURNING id`,
             post.Author, post.Message, post.Thread, post.Forum, post.Parent, post.Created,
         ).Scan(&post.Id)
         if err != nil {
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
         }
-        db.Exec(
-            `INSERT INTO forum_users (forum_id, user_id) VALUES ($1, $2)`,
+        db.Exec(context.Background(), `
+            INSERT INTO forum_users (forum_id, user_id) VALUES ($1, $2)`,
             forumId, authorId,
         )
 
@@ -126,8 +127,8 @@ func PostList(c echo.Context) error {
     }
 
     var forumSlug string
-    err = db.QueryRow(
-        `SELECT id, forum FROM threads WHERE LOWER(slug) = LOWER($1) OR id = $2`,
+    err = db.QueryRow(context.Background(), `
+        SELECT id, forum FROM threads WHERE LOWER(slug) = LOWER($1) OR id = $2`,
         threadSlug, threadId,
     ).Scan(&threadId, &forumSlug)
     if err != nil {
@@ -135,10 +136,10 @@ func PostList(c echo.Context) error {
     }
 
     posts := make([]models.Post, 0)
-    var rows *sql.Rows
+    var rows pgx.Rows
     if sort == "flat" {
-        rows, err = db.Query(
-            `SELECT author, created, forum, id, message, thread, parent
+        rows, err = db.Query(context.Background(), `
+            SELECT author, created, forum, id, message, thread, parent
             FROM posts
             WHERE
                 thread = $1
@@ -155,8 +156,8 @@ func PostList(c echo.Context) error {
             threadId, limit, desc, since,
         )
     } else if sort == "tree" {
-        rows, err = db.Query(
-            `SELECT author, created, forum, id, message, thread, parent
+        rows, err = db.Query(context.Background(), `
+            SELECT author, created, forum, id, message, thread, parent
             FROM posts
             WHERE
                 thread = $1
@@ -175,8 +176,8 @@ func PostList(c echo.Context) error {
             threadId, limit, desc, since,
         )
     } else if sort == "parent_tree" {
-        rows, err = db.Query(
-            `SELECT author, created, forum, id, message, thread, parent
+        rows, err = db.Query(context.Background(), `
+            SELECT author, created, forum, id, message, thread, parent
             FROM posts
             WHERE path[2] IN (
                 SELECT id FROM posts
@@ -233,8 +234,8 @@ func PostDetails(c echo.Context) error {
         return echo.NewHTTPError(http.StatusBadRequest, err.Error())
     }
 
-    err = db.QueryRow(
-        `SELECT author, created, forum, id, message, thread, is_edited FROM posts WHERE id = $1`,
+    err = db.QueryRow(context.Background(), `
+        SELECT author, created, forum, id, message, thread, is_edited FROM posts WHERE id = $1`,
         post.Id,
     ).Scan(&post.Author, &post.Created, &post.Forum, &post.Id, &post.Message, &post.Thread, &post.IsEdited)
     if err != nil {
@@ -244,8 +245,8 @@ func PostDetails(c echo.Context) error {
 
     if utils.StringInList("user", related) {
         author := models.User{}
-        err = db.QueryRow(
-            `SELECT about, email, fullname, nickname FROM users WHERE nickname = $1`,
+        err = db.QueryRow(context.Background(), `
+            SELECT about, email, fullname, nickname FROM users WHERE nickname = $1`,
             post.Author,
         ).Scan(&author.About, &author.Email, &author.Fullname, &author.Nickname)
         if err != nil {
@@ -256,8 +257,8 @@ func PostDetails(c echo.Context) error {
 
     if utils.StringInList("thread", related) {
         thread := models.Thread{}
-        err = db.QueryRow(
-            `SELECT author, created, forum, id, message, slug, title FROM threads WHERE id = $1`,
+        err = db.QueryRow(context.Background(), `
+            SELECT author, created, forum, id, message, slug, title FROM threads WHERE id = $1`,
             post.Thread,
         ).Scan(&thread.Author, &thread.Created, &thread.Forum, &thread.Id, &thread.Message, &thread.Slug, &thread.Title)
         if err != nil {
@@ -268,8 +269,8 @@ func PostDetails(c echo.Context) error {
 
     if utils.StringInList("forum", related) {
         forum := models.Forum{}
-        err = db.QueryRow(
-            `SELECT posts, slug, threads, title, user_nickname FROM forums WHERE LOWER(slug) = LOWER($1)`,
+        err = db.QueryRow(context.Background(), `
+            SELECT posts, slug, threads, title, user_nickname FROM forums WHERE LOWER(slug) = LOWER($1)`,
             post.Forum,
         ).Scan(&forum.Posts, &forum.Slug, &forum.Threads, &forum.Title, &forum.User)
         if err != nil {
@@ -298,7 +299,7 @@ func PostUpdate(c echo.Context) error {
         return echo.NewHTTPError(http.StatusBadRequest, err.Error())
     }
 
-    err = db.QueryRow(`
+    err = db.QueryRow(context.Background(), `
         UPDATE posts SET
             message = COALESCE($2, message),
             is_edited = CASE WHEN $2 IS NOT NULL AND message != $2 THEN true ELSE false END
