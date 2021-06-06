@@ -28,7 +28,7 @@ func ThreadCreate(c echo.Context) error {
 
     var authorId int
     err = db.QueryRow(context.Background(), `
-        SELECT id, nickname FROM users WHERE LOWER(nickname) = LOWER($1)`,
+        SELECT id, nickname FROM users WHERE nickname = $1`,
         newThread.Author,
     ).Scan(&authorId, &newThread.Author)
     if err != nil {
@@ -39,7 +39,7 @@ func ThreadCreate(c echo.Context) error {
     if len(newThread.Slug) > 0 {
         var oldThread models.Thread
         err = db.QueryRow(context.Background(), `
-            SELECT id, author, created, forum, message, slug, title FROM threads WHERE LOWER(slug) = LOWER($1)`,
+            SELECT id, author, created, forum, message, slug, title FROM threads WHERE slug = $1`,
             newThread.Slug,
         ).Scan(&oldThread.Id, &oldThread.Author, &oldThread.Created, &oldThread.Forum, &oldThread.Message, &oldThread.Slug, &oldThread.Title)
         if err == nil {
@@ -49,7 +49,7 @@ func ThreadCreate(c echo.Context) error {
 
     var forumId int
     err = db.QueryRow(context.Background(), `
-        UPDATE forums SET threads = threads + 1 WHERE LOWER(slug) = LOWER($1)
+        UPDATE forums SET threads = threads + 1 WHERE slug = $1
         RETURNING id, slug`,
         newThread.Forum,
     ).Scan(&forumId, &newThread.Forum)
@@ -85,7 +85,7 @@ func ThreadList(c echo.Context) error {
 
     var forumCount int64
     err := db.QueryRow(context.Background(), `
-        SELECT COUNT(*) FROM forums WHERE LOWER(slug) = LOWER($1)`,
+        SELECT COUNT(*) FROM forums WHERE slug = $1`,
         forumSlug,
     ).Scan(&forumCount)
     if err != nil {
@@ -101,7 +101,7 @@ func ThreadList(c echo.Context) error {
     }
     rows, err := db.Query(context.Background(), `
         SELECT author, created, forum, id, message, slug, title FROM threads
-        WHERE LOWER(forum) = LOWER($1) AND CASE WHEN $3 THEN created <= $2 ELSE created >= $2 END
+        WHERE forum = $1 AND CASE WHEN $3 THEN created <= $2 ELSE created >= $2 END
         ORDER BY
             CASE WHEN $3 THEN created END DESC,
             created ASC
@@ -140,7 +140,7 @@ func ThreadVote(c echo.Context) error {
     err = db.QueryRow(context.Background(), `
         SELECT author, created, forum, id, message, slug, title, votes
         FROM threads
-        WHERE LOWER(slug) = LOWER($1) OR id = $2`,
+        WHERE slug = $1 OR id = $2`,
         threadSlug, threadId,
     ).Scan(&thr.Author, &thr.Created, &thr.Forum, &thr.Id, &thr.Message, &thr.Slug, &thr.Title, &thr.Votes)
     if err != nil {
@@ -155,7 +155,7 @@ func ThreadVote(c echo.Context) error {
     }
 
     err = db.QueryRow(context.Background(), `
-        SELECT nickname FROM users WHERE LOWER(nickname) = LOWER($1)`,
+        SELECT nickname FROM users WHERE nickname = $1`,
         thrVote.Nickname,
     ).Scan(&thrVote.Nickname)
     if err != nil {
@@ -211,7 +211,7 @@ func ThreadDetails(c echo.Context) error {
     }
     thr := models.Thread{}
     err = db.QueryRow(context.Background(), `
-        SELECT author, created, forum, id, message, slug, title, votes FROM threads WHERE LOWER(slug) = LOWER($1) OR id = $2`,
+        SELECT author, created, forum, id, message, slug, title, votes FROM threads WHERE slug = $1 OR id = $2`,
         threadSlug, threadId,
     ).Scan(&thr.Author, &thr.Created, &thr.Forum, &thr.Id, &thr.Message, &thr.Slug, &thr.Title, &thr.Votes)
     if err != nil {
@@ -239,7 +239,7 @@ func ThreadUpdate(c echo.Context) error {
     thr := models.Thread{}
     err = db.QueryRow(context.Background(), `
         UPDATE threads SET title = COALESCE($3, title), message = COALESCE($4, message)
-        WHERE LOWER(slug) = LOWER($1) OR id = $2
+        WHERE slug = $1 OR id = $2
         RETURNING author, created, forum, id, message, slug, title, votes`,
         threadSlug, threadId, thrUpd.Title, thrUpd.Message,
     ).Scan(&thr.Author, &thr.Created, &thr.Forum, &thr.Id, &thr.Message, &thr.Slug, &thr.Title, &thr.Votes)

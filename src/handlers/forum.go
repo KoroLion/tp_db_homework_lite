@@ -25,7 +25,7 @@ func ForumCreate(c echo.Context) error {
     }
 
     err = db.QueryRow(context.Background(), `
-        SELECT nickname FROM users WHERE LOWER(nickname) = LOWER($1)`,
+        SELECT nickname FROM users WHERE nickname = $1`,
         newForum.User,
     ).Scan(&newForum.User)
     if err != nil {
@@ -34,7 +34,7 @@ func ForumCreate(c echo.Context) error {
     }
 
     err = db.QueryRow(context.Background(), `
-        SELECT title, user_nickname, slug FROM forums WHERE LOWER(slug) = LOWER($1)`,
+        SELECT title, user_nickname, slug FROM forums WHERE slug = $1`,
         newForum.Slug,
     ).Scan(&newForum.Title, &newForum.User, &newForum.Slug)
     if err == nil {
@@ -60,7 +60,7 @@ func ForumDetails(c echo.Context) error {
     forum.Slug = c.Param("slug")
 
     err := db.QueryRow(context.Background(), `
-        SELECT slug, title, user_nickname, threads, posts FROM forums WHERE LOWER(slug) = LOWER($1)`,
+        SELECT slug, title, user_nickname, threads, posts FROM forums WHERE slug = $1`,
         forum.Slug,
     ).Scan(&forum.Slug, &forum.Title, &forum.User, &forum.Threads, &forum.Posts)
     if err != nil {
@@ -69,7 +69,7 @@ func ForumDetails(c echo.Context) error {
     }
 
     err = db.QueryRow(context.Background(), `
-        SELECT COUNT(*) FROM posts WHERE LOWER(forum) = LOWER($1)`,
+        SELECT COUNT(*) FROM posts WHERE forum = $1`,
         forum.Slug,
     ).Scan(&forum.Posts)
     if err != nil {
@@ -98,7 +98,7 @@ func ForumUsers(c echo.Context) error {
 
     var forumId int
     err = db.QueryRow(context.Background(), `
-        SELECT id FROM forums WHERE LOWER(slug) = LOWER($1)`,
+        SELECT id FROM forums WHERE slug = $1`,
         forumSlug,
     ).Scan(&forumId)
     if err != nil {
@@ -113,13 +113,13 @@ func ForumUsers(c echo.Context) error {
             forum_id = $1
             AND
             (
-                CASE WHEN $3 THEN LOWER(nickname) < LOWER($4) ELSE LOWER(nickname) > LOWER($4) END
+                CASE WHEN $3 THEN nickname < $4 ELSE nickname > $4 END
                 OR
                 LENGTH($4) = 0
             )
         ORDER BY
-            CASE WHEN $3 THEN LOWER(nickname) END DESC,
-            LOWER(nickname) ASC
+            CASE WHEN $3 THEN nickname END DESC,
+            nickname ASC
         LIMIT $2`,
         forumId, limit, desc, since,
     )

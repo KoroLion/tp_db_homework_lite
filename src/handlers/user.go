@@ -28,7 +28,7 @@ func UserCreate(c echo.Context) error {
 
     oldUsers := make([]models.User, 0)
     rows1, err := db.Query(context.Background(), `
-        SELECT nickname, fullname, about, email FROM users WHERE LOWER(nickname) = LOWER($1) OR LOWER(email) = LOWER($2)`,
+        SELECT nickname, fullname, about, email FROM users WHERE nickname = $1 OR email = $2`,
         newUser.Nickname, newUser.Email,
     )
     if err != nil {
@@ -70,7 +70,7 @@ func UserDetails(c echo.Context) error {
 
     user := models.User{}
     err := db.QueryRow(context.Background(), `
-        SELECT nickname, fullname, about, email FROM users WHERE LOWER(nickname) = LOWER($1)`,
+        SELECT nickname, fullname, about, email FROM users WHERE nickname = $1`,
         nickname,
     ).Scan(&user.Nickname, &user.Fullname, &user.About, &user.Email)
     if err != nil {
@@ -87,7 +87,7 @@ func UserUpdate(c echo.Context) error {
 
     var count int
     err := db.QueryRow(context.Background(), `
-        SELECT COUNT(*) FROM users WHERE LOWER(nickname) = LOWER($1)`,
+        SELECT COUNT(*) FROM users WHERE nickname = $1`,
         nickname,
     ).Scan(&count)
     if err != nil {
@@ -107,7 +107,7 @@ func UserUpdate(c echo.Context) error {
     }
 
     err = db.QueryRow(context.Background(), `
-        SELECT COUNT(*) FROM users WHERE LOWER(email) = LOWER($1)`,
+        SELECT COUNT(*) FROM users WHERE email = $1`,
         updatedUser.Email,
     ).Scan(&count)
     if err != nil {
@@ -121,7 +121,7 @@ func UserUpdate(c echo.Context) error {
     user := models.User{}
     err = db.QueryRow(context.Background(), `
         UPDATE users SET fullname = COALESCE($2, fullname), about = COALESCE($3, about), email = COALESCE($4, email)
-        WHERE LOWER(nickname) = LOWER($1)
+        WHERE nickname = $1
         RETURNING nickname, fullname, about, email`,
         updatedUser.Nickname, updatedUser.Fullname, updatedUser.About, updatedUser.Email,
     ).Scan(&user.Nickname, &user.Fullname, &user.About, &user.Email)

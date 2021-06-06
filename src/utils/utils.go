@@ -67,8 +67,6 @@ func ClearDB(db *pgxpool.Pool) error {
 		DROP TABLE IF EXISTS threads;
 		DROP TABLE IF EXISTS posts;
 		DROP TABLE IF EXISTS thread_votes;
-
-		DROP TRIGGER IF EXISTS posts_path ON posts;
     `)
 
     return err
@@ -76,24 +74,26 @@ func ClearDB(db *pgxpool.Pool) error {
 
 func CreateTables(db *pgxpool.Pool) error {
 	_, err := db.Exec(context.Background(), `
-        CREATE TABLE IF NOT EXISTS users (
+        CREATE UNLOGGED TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
-            nickname VARCHAR(255) UNIQUE,
+            nickname CITEXT UNIQUE,
             fullname VARCHAR(255),
             about TEXT,
-            email VARCHAR(255) UNIQUE
+            email CITEXT UNIQUE
         );
+		CREATE INDEX users_nickname ON users (nickname);
 
-        CREATE TABLE IF NOT EXISTS forums (
+        CREATE UNLOGGED TABLE IF NOT EXISTS forums (
             id SERIAL PRIMARY KEY,
-            user_nickname VARCHAR(255),
+            user_nickname CITEXT,
             title VARCHAR(255),
-            slug VARCHAR(255) UNIQUE,
+            slug CITEXT UNIQUE,
 			threads INT DEFAULT 0,
 			posts INT DEFAULT 0
         );
+		CREATE INDEX forums_slug ON forums (slug);
 
-		CREATE TABLE IF NOT EXISTS forum_users (
+		CREATE UNLOGGED TABLE IF NOT EXISTS forum_users (
 			forum_id INT,
 			user_id INT,
 			UNIQUE(forum_id, user_id)
@@ -101,20 +101,21 @@ func CreateTables(db *pgxpool.Pool) error {
 
         CREATE TABLE IF NOT EXISTS threads (
             id SERIAL PRIMARY KEY,
-            forum VARCHAR(255),
+            forum CITEXT,
             title VARCHAR(255),
-            author VARCHAR(255),
+            author CITEXT,
             message TEXT,
             created TIMESTAMP WITH TIME ZONE,
             votes INT DEFAULT 0,
-            slug VARCHAR(255)
+            slug CITEXT
         );
+		CREATE INDEX threads_slug ON threads (slug);
 
-        CREATE TABLE IF NOT EXISTS posts (
+        CREATE UNLOGGED TABLE IF NOT EXISTS posts (
             id SERIAL PRIMARY KEY,
             parent INT,
 			path INT[],
-            author VARCHAR(255),
+            author CITEXT,
             message TEXT,
             is_edited BOOLEAN DEFAULT false,
             forum VARCHAR(255),
@@ -122,10 +123,10 @@ func CreateTables(db *pgxpool.Pool) error {
             created TIMESTAMP
         );
 
-		CREATE TABLE IF NOT EXISTS thread_votes (
+		CREATE UNLOGGED TABLE IF NOT EXISTS thread_votes (
 			id SERIAL PRIMARY KEY,
 			thread INT,
-			nickname VARCHAR(255),
+			nickname CITEXT,
 			voice INT
 		);
 

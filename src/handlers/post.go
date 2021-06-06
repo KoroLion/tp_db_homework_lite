@@ -26,7 +26,7 @@ func PostCreate(c echo.Context) error {
 
     var forumSlug string
     err = db.QueryRow(context.Background(), `
-        SELECT id, forum FROM threads WHERE LOWER(slug) = LOWER($1) OR id = $2`,
+        SELECT id, forum FROM threads WHERE slug = $1 OR id = $2`,
         threadSlug, threadId,
     ).Scan(&threadId, &forumSlug)
     if err != nil {
@@ -47,7 +47,7 @@ func PostCreate(c echo.Context) error {
 
         var authorId int
         err := db.QueryRow(context.Background(), `
-            SELECT id, nickname FROM users WHERE LOWER(nickname) = LOWER($1)`,
+            SELECT id, nickname FROM users WHERE nickname = $1`,
             post.Author,
         ).Scan(&authorId, &post.Author)
         if err != nil {
@@ -67,7 +67,7 @@ func PostCreate(c echo.Context) error {
 
         var forumId int
         err = db.QueryRow(context.Background(), `
-            UPDATE forums SET posts = posts + 1 WHERE LOWER(slug) = LOWER($1)
+            UPDATE forums SET posts = posts + 1 WHERE slug = $1
             RETURNING id`,
             post.Forum,
         ).Scan(&forumId)
@@ -77,7 +77,7 @@ func PostCreate(c echo.Context) error {
 
         err = db.QueryRow(context.Background(), `
             INSERT INTO posts (author, message, thread, forum, parent, created)
-                VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id`,
             post.Author, post.Message, post.Thread, post.Forum, post.Parent, post.Created,
         ).Scan(&post.Id)
@@ -128,7 +128,7 @@ func PostList(c echo.Context) error {
 
     var forumSlug string
     err = db.QueryRow(context.Background(), `
-        SELECT id, forum FROM threads WHERE LOWER(slug) = LOWER($1) OR id = $2`,
+        SELECT id, forum FROM threads WHERE slug = $1 OR id = $2`,
         threadSlug, threadId,
     ).Scan(&threadId, &forumSlug)
     if err != nil {
@@ -270,7 +270,7 @@ func PostDetails(c echo.Context) error {
     if utils.StringInList("forum", related) {
         forum := models.Forum{}
         err = db.QueryRow(context.Background(), `
-            SELECT posts, slug, threads, title, user_nickname FROM forums WHERE LOWER(slug) = LOWER($1)`,
+            SELECT posts, slug, threads, title, user_nickname FROM forums WHERE slug = $1`,
             post.Forum,
         ).Scan(&forum.Posts, &forum.Slug, &forum.Threads, &forum.Title, &forum.User)
         if err != nil {
