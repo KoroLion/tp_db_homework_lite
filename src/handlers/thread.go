@@ -132,13 +132,18 @@ func ThreadVote(c echo.Context) error {
     threadSlug := c.Param("slug_or_id")
     threadId, err := strconv.Atoi(threadSlug)
     if err != nil {
-        err = db.QueryRow(`
-            SELECT id, slug FROM threads WHERE LOWER(slug) = LOWER($1) OR id = $2`,
-            threadSlug, threadId,
-        ).Scan(&threadId, &threadSlug)
-        if err != nil {
-            return echo.NewHTTPError(http.StatusNotFound, err.Error())
-        }
+        threadId = 0
+    }
+
+    thr := models.Thread{}
+    err = db.QueryRow(`
+        SELECT author, created, forum, id, message, slug, title, votes
+        FROM threads
+        WHERE LOWER(slug) = LOWER($1) OR id = $2`,
+        threadSlug, threadId,
+    ).Scan(&thr.Author, &thr.Created, &thr.Forum, &thr.Id, &thr.Message, &thr.Slug, &thr.Title, &thr.Votes)
+    if err != nil {
+        return echo.NewHTTPError(http.StatusNotFound, err.Error())
     }
 
     var thrVote models.ThreadVote
@@ -159,35 +164,37 @@ func ThreadVote(c echo.Context) error {
     var prevVoice int
     err = db.QueryRow(`
         SELECT voice FROM thread_votes WHERE thread = $1 AND nickname = $2`,
-        threadId, thrVote.Nickname,
+        thr.Id, thrVote.Nickname,
     ).Scan(&prevVoice)
     if err != nil {
+        prevVoice = 0
         _, err := db.Exec(`
             INSERT INTO thread_votes (thread, nickname, voice) VALUES ($1, $2, $3)`,
-            threadId, thrVote.Nickname, thrVote.Voice,
+            thr.Id, thrVote.Nickname, thrVote.Voice,
         )
         if err != nil {
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
         }
-    } else {
+    } else if prevVoice != thrVote.Voice {
         _, err := db.Exec(`
             UPDATE thread_votes SET voice = $3 WHERE thread = $1 AND nickname = $2`,
-            threadId, thrVote.Nickname, thrVote.Voice,
+            thr.Id, thrVote.Nickname, thrVote.Voice,
         )
         if err != nil {
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
         }
     }
 
-    var thr models.Thread
-    err = db.QueryRow(`
-        UPDATE threads SET votes = votes - $2 + $3
-        WHERE id = $1
-        RETURNING author, created, forum, id, message, slug, title, votes`,
-        threadId, prevVoice, thrVote.Voice,
-    ).Scan(&thr.Author, &thr.Created, &thr.Forum, &thr.Id, &thr.Message, &thr.Slug, &thr.Title, &thr.Votes)
-    if err != nil {
-        return echo.NewHTTPError(http.StatusNotFound, "Thread was not found!")
+    if prevVoice != thrVote.Voice {
+        thr.Votes += thrVote.Voice - prevVoice
+        _, err = db.Exec(`
+            UPDATE threads SET votes = $2
+            WHERE id = $1`,
+            thr.Id, thr.Votes,
+        )
+        if err != nil {
+            return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+        }
     }
 
     return c.JSON(http.StatusOK, thr)
