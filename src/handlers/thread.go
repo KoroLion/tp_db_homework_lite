@@ -98,7 +98,7 @@ func ThreadList(c echo.Context) error {
         since = utils.GetSpecialDate(desc)
     }
     rows, err := db.Query(context.Background(), `
-        SELECT author, created, forum, id, message, slug, title FROM threads
+        SELECT author, created, forum, id, message, slug, title, votes FROM threads
         WHERE forum = $1 AND CASE WHEN $3 THEN created <= $2 ELSE created >= $2 END
         ORDER BY
             CASE WHEN $3 THEN created END DESC,
@@ -115,7 +115,7 @@ func ThreadList(c echo.Context) error {
     threads := make([]models.Thread, 0)
     for rows.Next() {
         thr := models.Thread{}
-        err := rows.Scan(&thr.Author, &thr.Created, &thr.Forum, &thr.Id, &thr.Message, &thr.Slug, &thr.Title)
+        err := rows.Scan(&thr.Author, &thr.Created, &thr.Forum, &thr.Id, &thr.Message, &thr.Slug, &thr.Title, &thr.Votes)
         if err != nil {
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
         }
@@ -152,6 +152,11 @@ func ThreadVote(c echo.Context) error {
         return echo.NewHTTPError(http.StatusBadRequest, err.Error())
     }
 
+    if thrVote.Voice > 1 || thrVote.Voice < -1 {
+        log.Println("abs(voice) > 1")
+        return echo.NewHTTPError(http.StatusBadRequest, "abs(voice) > 1")
+    }
+
     var userId int64
     err = db.QueryRow(context.Background(), `
         SELECT id, nickname FROM users WHERE nickname = $1`,
@@ -173,6 +178,7 @@ func ThreadVote(c echo.Context) error {
             thr.Id, userId, thrVote.Voice,
         )
         if err != nil {
+            log.Println(err)
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
         }
     } else if prevVoice != thrVote.Voice {
@@ -181,19 +187,20 @@ func ThreadVote(c echo.Context) error {
             thr.Id, userId, thrVote.Voice,
         )
         if err != nil {
+            log.Println(err)
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
         }
     }
 
     if prevVoice != thrVote.Voice {
-        thr.Votes += thrVote.Voice - prevVoice
-        _, err = db.Exec(context.Background(), `
-            UPDATE threads SET votes = $2
-            WHERE id = $1`,
-            thr.Id, thr.Votes,
-        )
+        err = db.QueryRow(context.Background(), `
+            UPDATE threads SET votes = votes - $2 + $3
+            WHERE id = $1
+            RETURNING votes`,
+            thr.Id, prevVoice, thrVote.Voice,
+        ).Scan(&thr.Votes)
         if err != nil {
-            return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+            log.Println(err)
         }
     }
 

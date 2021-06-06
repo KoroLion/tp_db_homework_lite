@@ -122,7 +122,7 @@ func CreateTables(db *pgxpool.Pool) error {
             title VARCHAR(255),
             author CITEXT,
             message TEXT,
-            created TIMESTAMP WITH TIME ZONE,
+            created TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             votes BIGINT DEFAULT 0,
             slug CITEXT,
 
@@ -140,7 +140,7 @@ func CreateTables(db *pgxpool.Pool) error {
             is_edited BOOLEAN DEFAULT false,
             forum CITEXT,
             thread BIGINT,
-            created TIMESTAMP,
+            created TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 
 			FOREIGN KEY (author) REFERENCES users (nickname),
 			FOREIGN KEY (forum) REFERENCES forums (slug),

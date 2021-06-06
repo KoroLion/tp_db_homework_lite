@@ -1,6 +1,7 @@
 package handlers
 
 import (
+    "fmt"
     "context"
     "strconv"
     "net/http"
@@ -51,7 +52,9 @@ func PostCreate(c echo.Context) error {
 
     newPosts := make([]models.Post, 0)
     var userIds []int
-    for _, post := range posts {
+    var queryValues string
+    var queryParams []interface{}
+    for i, post := range posts {
         post.Thread = threadId
         post.Forum = forumSlug
 
@@ -74,28 +77,48 @@ func PostCreate(c echo.Context) error {
         if err != nil {
             return echo.NewHTTPError(http.StatusNotFound, err.Error())
         }
-        if !utils.IntInList(authorId, userIds) {
-            userIds = append(userIds, authorId)
+
+        queryValues += fmt.Sprintf(
+            "($%d, $%d, $%d, $%d, $%d)",
+            i*5+1, i*5+2, i*5+3, i*5+4, i*5+5,
+        )
+        if i != len(posts) - 1 {
+            queryValues += ", "
         }
 
-        err = db.QueryRow(context.Background(), `
-            INSERT INTO posts (author, message, thread, forum, parent, created)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id`,
-            post.Author, post.Message, post.Thread, post.Forum, post.Parent, post.Created,
-        ).Scan(&post.Id)
-        if err != nil {
-            return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+        queryParams = append(queryParams, post.Author, post.Message, post.Thread, post.Forum, post.Parent)
+        if !utils.IntInList(authorId, userIds) {
+            userIds = append(userIds, authorId)
         }
 
         newPosts = append(newPosts, post)
     }
 
-    for _, userId := range userIds {
-        db.Exec(context.Background(), `
-            INSERT INTO forum_users (forum_id, user_id) VALUES ($1, $2)`,
-            forumId, userId,
+    if len(queryValues) > 0 {
+        query := fmt.Sprintf(`
+            INSERT INTO posts (author, message, thread, forum, parent)
+            VALUES %s
+            RETURNING id, created`,
+            queryValues,
         )
+
+        rows, err := db.Query(context.Background(), query, queryParams...)
+        if err != nil {
+            return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+        }
+        curPostInd := 0
+        for rows.Next() {
+            rows.Scan(&newPosts[curPostInd].Id, &newPosts[curPostInd].Created)
+            curPostInd += 1
+        }
+        rows.Close()
+
+        for _, userId := range userIds {
+            db.Exec(context.Background(), `
+                INSERT INTO forum_users (forum_id, user_id) VALUES ($1, $2)`,
+                forumId, userId,
+            )
+        }
     }
 
     return c.JSON(http.StatusCreated, newPosts)
