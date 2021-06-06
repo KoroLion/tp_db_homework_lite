@@ -23,6 +23,15 @@ func StringInList(s string, list []string) bool {
     return false
 }
 
+func IntInList(i int, list []int) bool {
+	for _, el := range list {
+        if i == el {
+            return true
+        }
+    }
+    return false
+}
+
 func GetSpecialDate(max bool) time.Time {
     if max {
         t, _ := time.Parse(time.RFC3339, "9999-12-31T00:00:00.000+00:00")
@@ -81,7 +90,7 @@ func CreateTables(db *pgxpool.Pool) error {
             about TEXT,
             email CITEXT UNIQUE
         );
-		CREATE INDEX users_nickname ON users (nickname);
+		CREATE INDEX users_nickname ON users USING HASH (nickname);
 
         CREATE UNLOGGED TABLE IF NOT EXISTS forums (
             id SERIAL PRIMARY KEY,
@@ -91,7 +100,7 @@ func CreateTables(db *pgxpool.Pool) error {
 			threads INT DEFAULT 0,
 			posts INT DEFAULT 0
         );
-		CREATE INDEX forums_slug ON forums (slug);
+		CREATE INDEX forums_slug ON forums USING HASH (slug);
 
 		CREATE UNLOGGED TABLE IF NOT EXISTS forum_users (
 			forum_id INT,
@@ -99,7 +108,7 @@ func CreateTables(db *pgxpool.Pool) error {
 			UNIQUE(forum_id, user_id)
 		);
 
-        CREATE TABLE IF NOT EXISTS threads (
+        CREATE UNLOGGED TABLE IF NOT EXISTS threads (
             id SERIAL PRIMARY KEY,
             forum CITEXT,
             title VARCHAR(255),
@@ -109,7 +118,7 @@ func CreateTables(db *pgxpool.Pool) error {
             votes INT DEFAULT 0,
             slug CITEXT
         );
-		CREATE INDEX threads_slug ON threads (slug);
+		CREATE INDEX threads_slug ON threads USING HASH (slug);
 
         CREATE UNLOGGED TABLE IF NOT EXISTS posts (
             id SERIAL PRIMARY KEY,
@@ -127,8 +136,10 @@ func CreateTables(db *pgxpool.Pool) error {
 			id SERIAL PRIMARY KEY,
 			thread INT,
 			nickname CITEXT,
-			voice INT
+			voice INT,
+			UNIQUE(thread, nickname)
 		);
+		CREATE INDEX thread_votes_thread_nickname ON thread_votes (thread, nickname);
 
 		CREATE OR REPLACE FUNCTION update_path()
 			RETURNS TRIGGER

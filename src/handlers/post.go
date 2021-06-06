@@ -40,10 +40,32 @@ func PostCreate(c echo.Context) error {
         return echo.NewHTTPError(http.StatusBadRequest, err.Error())
     }
 
+    var forumId int
+    err = db.QueryRow(context.Background(), `
+        UPDATE forums SET posts = posts + $2 WHERE slug = $1
+        RETURNING id`,
+        forumSlug, len(posts),
+    ).Scan(&forumId)
+    if err != nil {
+        return echo.NewHTTPError(http.StatusNotFound, "Forum was not found!")
+    }
+
     newPosts := make([]models.Post, 0)
+    var userIds []int
     for _, post := range posts {
         post.Thread = threadId
         post.Forum = forumSlug
+
+        if post.Parent != 0 {
+            var parentThread int
+            err := db.QueryRow(context.Background(), `
+                SELECT thread FROM posts WHERE id = $1`,
+                post.Parent,
+            ).Scan(&parentThread)
+            if err != nil || post.Thread != parentThread {
+                return echo.NewHTTPError(http.StatusConflict, "Parent was not found or created in another thread!")
+            }
+        }
 
         var authorId int
         err := db.QueryRow(context.Background(), `
@@ -53,26 +75,8 @@ func PostCreate(c echo.Context) error {
         if err != nil {
             return echo.NewHTTPError(http.StatusNotFound, err.Error())
         }
-
-        if post.Parent != 0 {
-            var amount int
-            err := db.QueryRow(context.Background(), `
-                SELECT COUNT(*) FROM posts WHERE id = $1 AND thread = $2`,
-                post.Parent, post.Thread,
-            ).Scan(&amount)
-            if err != nil || amount == 0 {
-                return echo.NewHTTPError(http.StatusConflict, "Parent was not found or created in another thread!")
-            }
-        }
-
-        var forumId int
-        err = db.QueryRow(context.Background(), `
-            UPDATE forums SET posts = posts + 1 WHERE slug = $1
-            RETURNING id`,
-            post.Forum,
-        ).Scan(&forumId)
-        if err != nil {
-            return echo.NewHTTPError(http.StatusNotFound, "Forum was not found!")
+        if !utils.IntInList(authorId, userIds) {
+            userIds = append(userIds, authorId)
         }
 
         err = db.QueryRow(context.Background(), `
@@ -84,14 +88,15 @@ func PostCreate(c echo.Context) error {
         if err != nil {
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
         }
+
+        newPosts = append(newPosts, post)
+    }
+
+    for _, userId := range userIds {
         db.Exec(context.Background(), `
             INSERT INTO forum_users (forum_id, user_id) VALUES ($1, $2)`,
-            forumId, authorId,
+            forumId, userId,
         )
-
-        post.Thread = threadId
-        post.Forum = forumSlug
-        newPosts = append(newPosts, post)
     }
 
     return c.JSON(http.StatusCreated, newPosts)

@@ -1,5 +1,7 @@
 .DS_Store
 *.exe
 
+swagger
+
 tech-db-forum
 report.html
