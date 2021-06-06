@@ -37,12 +37,14 @@ func ForumCreate(c echo.Context) error {
         return c.JSON(409, newForum)
     }
 
-    rows, err := db.Query("INSERT INTO forums (title, user_nickname, slug) VALUES ($1, $2, $3)", newForum.Title, newForum.User, newForum.Slug)
+    _, err = db.Exec(`
+        INSERT INTO forums (title, user_nickname, slug) VALUES ($1, $2, $3)`,
+        newForum.Title, newForum.User, newForum.Slug,
+    )
     if err != nil {
         log.Println(err)
         return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
     }
-    defer rows.Close()
 
     return c.JSON(http.StatusCreated, newForum)
 }

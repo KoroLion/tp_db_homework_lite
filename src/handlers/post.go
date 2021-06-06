@@ -65,8 +65,9 @@ func PostCreate(c echo.Context) error {
         }
 
         var forumId int
-        err = db.QueryRow(
-            `UPDATE forums SET posts = posts + 1 WHERE LOWER(slug) = LOWER($1) RETURNING id`,
+        err = db.QueryRow(`
+            UPDATE forums SET posts = posts + 1 WHERE LOWER(slug) = LOWER($1)
+            RETURNING id`,
             post.Forum,
         ).Scan(&forumId)
         if err != nil {
