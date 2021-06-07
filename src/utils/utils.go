@@ -174,7 +174,7 @@ func CreateTables(db *pgxpool.Pool) error {
 		END;
 		$update_path$ LANGUAGE plpgsql;
 
-		DROP TRIGGER posts_path ON posts;
+		DROP TRIGGER IF EXISTS posts_path ON posts;
 		CREATE TRIGGER posts_path BEFORE INSERT ON posts
 			FOR EACH ROW
 			EXECUTE PROCEDURE update_path();

@@ -14,7 +14,12 @@ import (
 func ServiceClear(c echo.Context) error {
     db := c.(*utils.ContextAndDb).DB
 
-    err := utils.ClearTables(db)
+    err := utils.ClearDB(db)
+    if err != nil {
+        log.Println(err)
+        return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+    }
+    err = utils.CreateTables(db)
     if err != nil {
         log.Println(err)
         return echo.NewHTTPError(http.StatusInternalServerError, err.Error())

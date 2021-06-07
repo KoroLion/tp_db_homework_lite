@@ -4,8 +4,5 @@
 swagger
 echo.log
 
-tech-db-forum.dat
-tech-db-forum.dat.gz
-tech-db-forum.dat.gz_win
-tech-db-forum
+tech-db-forum*
 report.html

@@ -85,8 +85,8 @@ func PostCreate(c echo.Context) error {
         if i != len(posts) - 1 {
             queryValues += ", "
         }
-
         queryParams = append(queryParams, post.Author, post.Message, post.Thread, post.Forum, post.Parent)
+
         if !utils.IntInList(authorId, userIds) {
             userIds = append(userIds, authorId)
         }
@@ -113,12 +113,27 @@ func PostCreate(c echo.Context) error {
         }
         rows.Close()
 
-        for _, userId := range userIds {
-            db.Exec(context.Background(), `
-                INSERT INTO forum_users (forum_id, user_id) VALUES ($1, $2)`,
-                forumId, userId,
+        var queryValues string
+        var queryParams []interface{}
+        last := len(userIds) - 1
+        for i, userId := range userIds {
+            queryValues += fmt.Sprintf(
+                "($%d, $%d)",
+                i*2+1, i*2+2,
             )
+            if i != last {
+                queryValues += ", "
+            }
+            queryParams = append(queryParams, forumId, userId)
         }
+
+        query = fmt.Sprintf(`
+            INSERT INTO forum_users (forum_id, user_id)
+            VALUES %s
+            ON CONFLICT DO NOTHING`,
+            queryValues,
+        )
+        db.Exec(context.Background(), query, queryParams...)
     }
 
     return c.JSON(http.StatusCreated, newPosts)
