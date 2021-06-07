@@ -92,7 +92,7 @@ func CreateTables(db *pgxpool.Pool) error {
             about TEXT,
             email CITEXT UNIQUE
         );
-		CREATE INDEX users_nickname ON users USING HASH (nickname);
+		CREATE INDEX IF NOT EXISTS users_nickname ON users USING HASH (nickname);
 
         CREATE UNLOGGED TABLE IF NOT EXISTS forums (
             id BIGSERIAL PRIMARY KEY,
@@ -104,7 +104,7 @@ func CreateTables(db *pgxpool.Pool) error {
 
 			FOREIGN KEY (user_nickname) REFERENCES users (nickname)
         );
-		CREATE INDEX forums_slug ON forums USING HASH (slug);
+		CREATE INDEX IF NOT EXISTS forums_slug ON forums USING HASH (slug);
 
 		CREATE UNLOGGED TABLE IF NOT EXISTS forum_users (
 			forum_id BIGINT,
@@ -129,7 +129,7 @@ func CreateTables(db *pgxpool.Pool) error {
 			FOREIGN KEY (forum) REFERENCES forums (slug),
 			FOREIGN KEY (author) REFERENCES users (nickname)
         );
-		CREATE INDEX threads_slug ON threads USING HASH (slug);
+		CREATE INDEX IF NOT EXISTS threads_slug ON threads USING HASH (slug);
 
         CREATE UNLOGGED TABLE IF NOT EXISTS posts (
             id BIGSERIAL PRIMARY KEY,
@@ -146,6 +146,10 @@ func CreateTables(db *pgxpool.Pool) error {
 			FOREIGN KEY (forum) REFERENCES forums (slug),
 			FOREIGN KEY (thread) REFERENCES threads (id)
         );
+		CREATE INDEX IF NOT EXISTS post_thread_id ON posts (thread, id);
+		CREATE INDEX IF NOT EXISTS post_thread_path ON posts (thread, path);
+		CREATE INDEX IF NOT EXISTS post_thread_path2_parent ON posts (thread, (path[2]), parent);
+		CREATE INDEX IF NOT EXISTS post_thread_path2 ON posts (thread, (path[2]));
 
 		CREATE UNLOGGED TABLE IF NOT EXISTS thread_votes (
 			id BIGSERIAL PRIMARY KEY,
@@ -158,7 +162,7 @@ func CreateTables(db *pgxpool.Pool) error {
 			FOREIGN KEY (thread_id) REFERENCES threads (id),
 			FOREIGN KEY (user_id) REFERENCES users (id)
 		);
-		CREATE INDEX thread_votes_thread_nickname ON thread_votes (thread_id, user_id);
+		CREATE INDEX IF NOT EXISTS thread_votes_thread_nickname ON thread_votes (thread_id, user_id);
 
 		CREATE OR REPLACE FUNCTION update_path()
 			RETURNS TRIGGER
@@ -170,6 +174,7 @@ func CreateTables(db *pgxpool.Pool) error {
 		END;
 		$update_path$ LANGUAGE plpgsql;
 
+		DROP TRIGGER posts_path ON posts;
 		CREATE TRIGGER posts_path BEFORE INSERT ON posts
 			FOR EACH ROW
 			EXECUTE PROCEDURE update_path();

@@ -66,14 +66,6 @@ func ForumDetails(c echo.Context) error {
         return echo.NewHTTPError(http.StatusNotFound, "Forum not found")
     }
 
-    err = db.QueryRow(context.Background(), `
-        SELECT COUNT(*) FROM posts WHERE forum = $1`,
-        forum.Slug,
-    ).Scan(&forum.Posts)
-    if err != nil {
-        return echo.NewHTTPError(http.StatusNotFound, "Forum not found")
-    }
-
     return c.JSON(http.StatusOK, forum)
 }
 

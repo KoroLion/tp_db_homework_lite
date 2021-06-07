@@ -4,6 +4,8 @@ import (
 	"log"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+
 	"os"
 	"context"
 	"time"
@@ -22,11 +24,11 @@ func main() {
 	}
 	defer db.Close()
 
-	err = utils.ClearDB(db)
+	/*err = utils.ClearDB(db)
 	if err != nil {
 		log.Println(err)
 		return
-	}
+	}*/
 	err = utils.CreateTables(db)
 	if err != nil {
 		log.Println(err)
@@ -40,6 +42,16 @@ func main() {
 			return h(cc)
 		}
 	})
+
+	logFile, err := os.Create("echo.log")
+	if err == nil {
+		e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
+			Output: logFile,
+			Format: "method=${method}, uri=${uri}, status=${status}, ${latency_human}, ${error}\n",
+		}))
+	} else {
+		log.Println(err)
+	}
 	e.Static("/api/swagger", "swagger")
 
 	e.POST("/api/service/clear", handlers.ServiceClear)
