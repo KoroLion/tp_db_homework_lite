@@ -4,7 +4,7 @@ import (
 	"log"
 
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	// "github.com/labstack/echo/v4/middleware"
 
 	"os"
 	"context"
@@ -43,7 +43,7 @@ func main() {
 		}
 	})
 
-	logFile, err := os.Create("echo.log")
+	/*logFile, err := os.Create("echo.log")
 	if err == nil {
 		e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
 			Output: logFile,
@@ -51,7 +51,7 @@ func main() {
 		}))
 	} else {
 		log.Println(err)
-	}
+	}*/
 	e.Static("/api/swagger", "swagger")
 
 	e.POST("/api/service/clear", handlers.ServiceClear)

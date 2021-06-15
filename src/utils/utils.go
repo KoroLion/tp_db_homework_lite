@@ -161,8 +161,6 @@ func CreateTables(db *pgxpool.Pool) error {
 			user_id BIGINT,
 			voice BIGINT,
 
-			UNIQUE(thread_id, user_id),
-
 			FOREIGN KEY (thread_id) REFERENCES threads (id),
 			FOREIGN KEY (user_id) REFERENCES users (id)
 		);

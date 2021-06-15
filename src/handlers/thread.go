@@ -160,7 +160,7 @@ func ThreadVote(c echo.Context) error {
 
     var userId int64
     err = db.QueryRow(context.Background(), `
-        SELECT id, nickname FROM users WHERE nickname = $1`,
+        SELECT id, nickname FROM users WHERE nickname = $1 LIMIT 1`,
         thrVote.Nickname,
     ).Scan(&userId, &thrVote.Nickname)
     if err != nil {
@@ -170,7 +170,7 @@ func ThreadVote(c echo.Context) error {
 
     var prevVoice int64
     err = db.QueryRow(context.Background(), `
-        SELECT voice FROM thread_votes WHERE thread_id = $1 AND user_id = $2`,
+        SELECT voice FROM thread_votes WHERE thread_id = $1 AND user_id = $2 LIMIT 1`,
         thr.Id, userId,
     ).Scan(&prevVoice)
     if err != nil {
@@ -201,10 +201,10 @@ func ThreadVote(c echo.Context) error {
     if (prevVoice != thrVote.Voice) {
         err = db.QueryRow(context.Background(), `
             UPDATE threads SET
-                votes = (SELECT SUM(voice) FROM thread_votes WHERE thread_id = $1)
+                votes = votes - $2 + $3
             WHERE id = $1
             RETURNING votes`,
-            thr.Id,
+            thr.Id, prevVoice, thrVote.Voice,
         ).Scan(&thr.Votes)
         if err != nil {
             log.Println(err)
