@@ -174,6 +174,7 @@ func ThreadVote(c echo.Context) error {
         thr.Id, userId,
     ).Scan(&prevVoice)
     if err != nil {
+        prevVoice = 0
         if thr.Id <= 0 || userId <= 0 {
             log.Printf("No thread_votes for %d and %d", thr.Id, userId)
         }
@@ -186,7 +187,7 @@ func ThreadVote(c echo.Context) error {
             log.Println(err)
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
         }
-    } else {
+    } else if (prevVoice != thrVote.Voice) {
         _, err := db.Exec(context.Background(), `
             UPDATE thread_votes SET voice = $3 WHERE thread_id = $1 AND user_id = $2`,
             thr.Id, userId, thrVote.Voice,
@@ -197,15 +198,17 @@ func ThreadVote(c echo.Context) error {
         }
     }
 
-    err = db.QueryRow(context.Background(), `
-        UPDATE threads SET
-            votes = (SELECT SUM(voice) FROM thread_votes WHERE thread_id = $1)
-        WHERE id = $1
-        RETURNING votes`,
-        thr.Id,
-    ).Scan(&thr.Votes)
-    if err != nil {
-        log.Println(err)
+    if (prevVoice != thrVote.Voice) {
+        err = db.QueryRow(context.Background(), `
+            UPDATE threads SET
+                votes = (SELECT SUM(voice) FROM thread_votes WHERE thread_id = $1)
+            WHERE id = $1
+            RETURNING votes`,
+            thr.Id,
+        ).Scan(&thr.Votes)
+        if err != nil {
+            log.Println(err)
+        }
     }
 
     return c.JSON(http.StatusOK, thr)

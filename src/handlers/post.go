@@ -94,6 +94,11 @@ func PostCreate(c echo.Context) error {
         newPosts = append(newPosts, post)
     }
 
+    tx, err := db.Begin(context.Background())
+    if err != nil {
+        return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+    }
+    defer tx.Rollback(context.Background())
     if len(queryValues) > 0 {
         query := fmt.Sprintf(`
             INSERT INTO posts (author, message, thread, forum, parent)
@@ -102,8 +107,9 @@ func PostCreate(c echo.Context) error {
             queryValues,
         )
 
-        rows, err := db.Query(context.Background(), query, queryParams...)
+        rows, err := tx.Query(context.Background(), query, queryParams...)
         if err != nil {
+            tx.Rollback(context.Background())
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
         }
         curPostInd := 0
@@ -133,8 +139,13 @@ func PostCreate(c echo.Context) error {
             ON CONFLICT DO NOTHING`,
             queryValues,
         )
-        db.Exec(context.Background(), query, queryParams...)
+        _, err = tx.Exec(context.Background(), query, queryParams...)
+        if err != nil {
+            tx.Rollback(context.Background())
+            return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+        }
     }
+    tx.Commit(context.Background())
 
     return c.JSON(http.StatusCreated, newPosts)
 }
@@ -276,9 +287,9 @@ func PostDetails(c echo.Context) error {
     }
 
     err = db.QueryRow(context.Background(), `
-        SELECT author, created, forum, id, message, thread, is_edited FROM posts WHERE id = $1`,
+        SELECT parent, author, created, forum, id, message, thread, is_edited FROM posts WHERE id = $1`,
         post.Id,
-    ).Scan(&post.Author, &post.Created, &post.Forum, &post.Id, &post.Message, &post.Thread, &post.IsEdited)
+    ).Scan(&post.Parent, &post.Author, &post.Created, &post.Forum, &post.Id, &post.Message, &post.Thread, &post.IsEdited)
     if err != nil {
         return echo.NewHTTPError(http.StatusNotFound, err.Error())
     }
@@ -299,9 +310,9 @@ func PostDetails(c echo.Context) error {
     if utils.StringInList("thread", related) {
         thread := models.Thread{}
         err = db.QueryRow(context.Background(), `
-            SELECT author, created, forum, id, message, slug, title FROM threads WHERE id = $1`,
+            SELECT author, created, forum, id, message, slug, title, votes FROM threads WHERE id = $1`,
             post.Thread,
-        ).Scan(&thread.Author, &thread.Created, &thread.Forum, &thread.Id, &thread.Message, &thread.Slug, &thread.Title)
+        ).Scan(&thread.Author, &thread.Created, &thread.Forum, &thread.Id, &thread.Message, &thread.Slug, &thread.Title, &thread.Votes)
         if err != nil {
             return echo.NewHTTPError(http.StatusNotFound, err.Error())
         }

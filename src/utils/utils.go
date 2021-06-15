@@ -45,7 +45,11 @@ func PostgresConnect(host string, port int, db_name string, username string, pas
     fmt.Println("Connecting to the database!")
     dsn := fmt.Sprintf("user=%s password=%s host=%s port=%d dbname=%s sslmode=disable", username, password, host, port, db_name)
 
-	db, err := pgxpool.Connect(context.Background(), dsn)
+	config, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, err
+	}
+	db, err := pgxpool.ConnectConfig(context.Background(), config)
 	if err != nil {
 		return nil, err
 	}
