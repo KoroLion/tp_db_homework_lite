@@ -13,7 +13,7 @@ RUN echo "listen_addresses='localhost'" >> /etc/postgresql/12/main/postgresql.co
 
 USER postgres
 RUN service postgresql start && psql -f init.sql
-EXPOSE 5000
 
 USER root
+EXPOSE 5000
 CMD service postgresql start && ./main
