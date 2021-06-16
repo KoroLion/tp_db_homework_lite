@@ -218,16 +218,13 @@ func PostList(c echo.Context) error {
                 FROM posts
                 WHERE path[2] IN (
                     SELECT id FROM posts
-                    WHERE
-                        thread = $1
+                    WHERE thread = $1 AND parent = 0
                         AND
-                        parent = 0
-                        AND
-                        ($3 = 0 OR path[2] < (SELECT path[2] FROM posts WHERE id = $3))
+                        (($3 = 0) OR (path[2] < (SELECT path[2] FROM posts WHERE id = $3))
                     ORDER BY id DESC
                     LIMIT $2
                 )
-                ORDER BY path[2] DESC`,
+                ORDER BY path[2] DESC, path ASC`,
                 threadId, limit, since,
             )
         }
@@ -303,7 +300,9 @@ func PostDetails(c echo.Context) error {
     }
 
     err = db.QueryRow(context.Background(), `
-        SELECT parent, author, created, forum, id, message, thread, is_edited FROM posts WHERE id = $1 LIMIT 1`,
+        SELECT parent, author, created, forum, id, message, thread, is_edited
+        FROM posts
+        WHERE id = $1`,
         post.Id,
     ).Scan(&post.Parent, &post.Author, &post.Created, &post.Forum, &post.Id, &post.Message, &post.Thread, &post.IsEdited)
     if err != nil {
@@ -371,7 +370,7 @@ func PostUpdate(c echo.Context) error {
         UPDATE posts SET
             message = COALESCE($2, message),
             is_edited = CASE WHEN $2 IS NOT NULL AND message != $2 THEN true ELSE false END
-        WHERE id = $1 LIMIT 1
+        WHERE id = $1
         RETURNING author, created, forum, id, message, thread, is_edited`,
         post.Id, postUpd.Message,
     ).Scan(&post.Author, &post.Created, &post.Forum, &post.Id, &post.Message, &post.Thread, &post.IsEdited)
