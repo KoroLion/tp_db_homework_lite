@@ -181,7 +181,7 @@ func PostList(c echo.Context) error {
 
     var forumSlug string
     err = db.QueryRow(context.Background(), `
-        SELECT id, forum FROM threads WHERE slug = $1 OR id = $2`,
+        SELECT id, forum FROM threads WHERE slug = $1 OR id = $2 LIMIT 1`,
         threadSlug, threadId,
     ).Scan(&threadId, &forumSlug)
     if err != nil {
@@ -190,70 +190,86 @@ func PostList(c echo.Context) error {
 
     posts := make([]models.Post, 0)
     var rows pgx.Rows
-    if sort == "flat" {
-        rows, err = db.Query(context.Background(), `
-            SELECT author, created, forum, id, message, thread, parent
-            FROM posts
-            WHERE
-                thread = $1
-                AND
-                (
-                    CASE WHEN $3 THEN id < $4 ELSE id > $4 END
-                    OR
-                    $4 = 0
-                )
-            ORDER BY
-                CASE WHEN $3 THEN id END DESC,
-                id ASC
-            LIMIT $2`,
-            threadId, limit, desc, since,
-        )
-    } else if sort == "tree" {
-        rows, err = db.Query(context.Background(), `
-            SELECT author, created, forum, id, message, thread, parent
-            FROM posts
-            WHERE
-                thread = $1
-                AND
-                CASE WHEN $3 THEN
-                    (path < (SELECT path FROM posts WHERE id = $4)
-                    OR
-                    $4 = 0)
-                ELSE
-                    path > COALESCE((SELECT path FROM posts WHERE id = $4), ARRAY[0])
-                END
-            ORDER BY
-                CASE WHEN $3 THEN path END DESC,
-                path ASC
-            LIMIT $2`,
-            threadId, limit, desc, since,
-        )
-    } else if sort == "parent_tree" {
-        rows, err = db.Query(context.Background(), `
-            SELECT author, created, forum, id, message, thread, parent
-            FROM posts
-            WHERE path[2] IN (
-                SELECT id FROM posts
-                WHERE
-                    thread = $1 AND parent = 0
-                    AND
-                    CASE WHEN $3 THEN
-                        (path[2] < (SELECT path[2] FROM posts WHERE id = $4)
-                        OR
-                        $4 = 0)
-                    ELSE
-                        path[2] > COALESCE((SELECT path[2] FROM posts WHERE id = $4), 0)
-                    END
-                ORDER BY
-                    CASE WHEN $3 THEN id END DESC,
-                    id ASC
-                LIMIT $2
+    if desc {
+        if sort == "flat" {
+            rows, err = db.Query(context.Background(), `
+                SELECT author, created, forum, id, message, thread, parent
+                FROM posts
+                WHERE thread = $1 AND (id < $3 OR $3 = 0)
+                ORDER BY id DESC
+                LIMIT $2`,
+                threadId, limit, since,
             )
-            ORDER BY
-                CASE WHEN $3 THEN path[2] END DESC,
-                path`,
-            threadId, limit, desc, since,
-        )
+        } else if sort == "tree" {
+            rows, err = db.Query(context.Background(), `
+                SELECT author, created, forum, id, message, thread, parent
+                FROM posts
+                WHERE
+                    thread = $1
+                    AND
+                    (path < (SELECT path FROM posts WHERE id = $3) OR $3 = 0)
+                ORDER BY path DESC
+                LIMIT $2`,
+                threadId, limit, since,
+            )
+        } else if sort == "parent_tree" {
+            rows, err = db.Query(context.Background(), `
+                SELECT author, created, forum, id, message, thread, parent
+                FROM posts
+                WHERE path[2] IN (
+                    SELECT id FROM posts
+                    WHERE
+                        thread = $1
+                        AND
+                        parent = 0
+                        AND
+                        ($3 = 0 OR path[2] < (SELECT path[2] FROM posts WHERE id = $3))
+                    ORDER BY id DESC
+                    LIMIT $2
+                )
+                ORDER BY path[2] DESC`,
+                threadId, limit, since,
+            )
+        }
+    } else {
+        if sort == "flat" {
+            rows, err = db.Query(context.Background(), `
+                SELECT author, created, forum, id, message, thread, parent
+                FROM posts
+                WHERE thread = $1 AND ($3 = 0 OR id > $3)
+                ORDER BY id ASC
+                LIMIT $2`,
+                threadId, limit, since,
+            )
+        } else if sort == "tree" {
+            rows, err = db.Query(context.Background(), `
+                SELECT author, created, forum, id, message, thread, parent
+                FROM posts
+                WHERE
+                    thread = $1
+                    AND
+                    path > COALESCE((SELECT path FROM posts WHERE id = $3), ARRAY[0])
+                ORDER BY path ASC
+                LIMIT $2`,
+                threadId, limit, since,
+            )
+        } else if sort == "parent_tree" {
+            rows, err = db.Query(context.Background(), `
+                SELECT author, created, forum, id, message, thread, parent
+                FROM posts
+                WHERE path[2] IN (
+                    SELECT id FROM posts
+                    WHERE
+                        thread = $1 AND parent = 0
+                        AND
+                        path[2] > COALESCE((SELECT path[2] FROM posts WHERE id = $3), 0)
+                    ORDER BY id ASC
+                    LIMIT $2
+                )
+                ORDER BY path ASC`,
+                threadId, limit, since,
+            )
+        }
     }
     if err != nil {
         return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -287,7 +303,7 @@ func PostDetails(c echo.Context) error {
     }
 
     err = db.QueryRow(context.Background(), `
-        SELECT parent, author, created, forum, id, message, thread, is_edited FROM posts WHERE id = $1`,
+        SELECT parent, author, created, forum, id, message, thread, is_edited FROM posts WHERE id = $1 LIMIT 1`,
         post.Id,
     ).Scan(&post.Parent, &post.Author, &post.Created, &post.Forum, &post.Id, &post.Message, &post.Thread, &post.IsEdited)
     if err != nil {
@@ -310,7 +326,7 @@ func PostDetails(c echo.Context) error {
     if utils.StringInList("thread", related) {
         thread := models.Thread{}
         err = db.QueryRow(context.Background(), `
-            SELECT author, created, forum, id, message, slug, title, votes FROM threads WHERE id = $1`,
+            SELECT author, created, forum, id, message, slug, title, votes FROM threads WHERE id = $1 LIMIT 1`,
             post.Thread,
         ).Scan(&thread.Author, &thread.Created, &thread.Forum, &thread.Id, &thread.Message, &thread.Slug, &thread.Title, &thread.Votes)
         if err != nil {
@@ -322,7 +338,7 @@ func PostDetails(c echo.Context) error {
     if utils.StringInList("forum", related) {
         forum := models.Forum{}
         err = db.QueryRow(context.Background(), `
-            SELECT posts, slug, threads, title, user_nickname FROM forums WHERE slug = $1`,
+            SELECT posts, slug, threads, title, user_nickname FROM forums WHERE slug = $1 LIMIT 1`,
             post.Forum,
         ).Scan(&forum.Posts, &forum.Slug, &forum.Threads, &forum.Title, &forum.User)
         if err != nil {
@@ -355,7 +371,7 @@ func PostUpdate(c echo.Context) error {
         UPDATE posts SET
             message = COALESCE($2, message),
             is_edited = CASE WHEN $2 IS NOT NULL AND message != $2 THEN true ELSE false END
-        WHERE id = $1
+        WHERE id = $1 LIMIT 1
         RETURNING author, created, forum, id, message, thread, is_edited`,
         post.Id, postUpd.Message,
     ).Scan(&post.Author, &post.Created, &post.Forum, &post.Id, &post.Message, &post.Thread, &post.IsEdited)

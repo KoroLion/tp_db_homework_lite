@@ -47,7 +47,7 @@ func main() {
 	if err == nil {
 		e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
 			Output: logFile,
-			Format: "method=${method}, uri=${uri}, status=${status}, ${latency_human}, ${error}\n",
+			Format: "${status} ${method} ${uri} ${latency}\n",
 		}))
 	} else {
 		log.Println(err)
