@@ -189,82 +189,92 @@ func PostList(c echo.Context) error {
     }
 
     posts := make([]models.Post, 0)
+    sinceClause := ""
+    hasSince := since > 0
+    sinceStr := strconv.Itoa(since)
     var rows pgx.Rows
     if desc {
         if sort == "flat" {
+            if (hasSince) {
+                sinceClause = " AND id < " + sinceStr + " "
+            }
             rows, err = db.Query(context.Background(), `
                 SELECT author, created, forum, id, message, thread, parent
                 FROM posts
-                WHERE thread = $1 AND (id < $3 OR $3 = 0)
+                WHERE thread = $1` + sinceClause + `
                 ORDER BY id DESC
                 LIMIT $2`,
-                threadId, limit, since,
+                threadId, limit,
             )
         } else if sort == "tree" {
+            if (hasSince) {
+                sinceClause = " AND path < (SELECT path FROM posts WHERE id = " + sinceStr + ") "
+            }
             rows, err = db.Query(context.Background(), `
                 SELECT author, created, forum, id, message, thread, parent
                 FROM posts
-                WHERE
-                    thread = $1
-                    AND
-                    (path < (SELECT path FROM posts WHERE id = $3) OR $3 = 0)
+                WHERE thread = $1` + sinceClause + `
                 ORDER BY path DESC
                 LIMIT $2`,
-                threadId, limit, since,
+                threadId, limit,
             )
         } else if sort == "parent_tree" {
+            if (hasSince) {
+                sinceClause = " AND (path[2] < (SELECT path[2] FROM posts WHERE id = " + sinceStr + ")) "
+            }
             rows, err = db.Query(context.Background(), `
                 SELECT author, created, forum, id, message, thread, parent
                 FROM posts
                 WHERE path[2] IN (
                     SELECT id FROM posts
-                    WHERE thread = $1 AND parent = 0
-                        AND
-                        (($3 = 0) OR (path[2] < (SELECT path[2] FROM posts WHERE id = $3)))
+                    WHERE thread = $1 AND parent = 0` + sinceClause + `
                     ORDER BY id DESC
                     LIMIT $2
                 )
                 ORDER BY path[2] DESC, path ASC`,
-                threadId, limit, since,
+                threadId, limit,
             )
         }
     } else {
         if sort == "flat" {
+            if (hasSince) {
+                sinceClause = " AND id > " + sinceStr + " "
+            }
             rows, err = db.Query(context.Background(), `
                 SELECT author, created, forum, id, message, thread, parent
                 FROM posts
-                WHERE thread = $1 AND ($3 = 0 OR id > $3)
+                WHERE thread = $1 ` + sinceClause + `
                 ORDER BY id ASC
                 LIMIT $2`,
-                threadId, limit, since,
+                threadId, limit,
             )
         } else if sort == "tree" {
+            if (hasSince) {
+                sinceClause = "AND path > COALESCE((SELECT path FROM posts WHERE id = " + sinceStr + "), ARRAY[0])"
+            }
             rows, err = db.Query(context.Background(), `
                 SELECT author, created, forum, id, message, thread, parent
                 FROM posts
-                WHERE
-                    thread = $1
-                    AND
-                    path > COALESCE((SELECT path FROM posts WHERE id = $3), ARRAY[0])
+                WHERE thread = $1 ` + sinceClause + `
                 ORDER BY path ASC
                 LIMIT $2`,
-                threadId, limit, since,
+                threadId, limit,
             )
         } else if sort == "parent_tree" {
+            if (hasSince) {
+                sinceClause = "AND path[2] > COALESCE((SELECT path[2] FROM posts WHERE id = " + sinceStr + "), 0)"
+            }
             rows, err = db.Query(context.Background(), `
                 SELECT author, created, forum, id, message, thread, parent
                 FROM posts
                 WHERE path[2] IN (
                     SELECT id FROM posts
-                    WHERE
-                        thread = $1 AND parent = 0
-                        AND
-                        path[2] > COALESCE((SELECT path[2] FROM posts WHERE id = $3), 0)
+                    WHERE thread = $1 AND parent = 0 ` + sinceClause + `
                     ORDER BY id ASC
                     LIMIT $2
                 )
                 ORDER BY path ASC`,
-                threadId, limit, since,
+                threadId, limit,
             )
         }
     }
