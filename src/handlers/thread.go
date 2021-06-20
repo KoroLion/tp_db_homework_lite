@@ -9,6 +9,7 @@ import (
     "log"
 
     "github.com/labstack/echo/v4"
+    "github.com/jackc/pgx/v4"
 
     "tp_db_homework/src/models"
     "tp_db_homework/src/utils"
@@ -81,15 +82,11 @@ func ThreadList(c echo.Context) error {
     limit, _ := strconv.Atoi(c.QueryParam("limit"))
     desc, _ := strconv.ParseBool(c.QueryParam("desc"))
 
-    var forumCount int64
     err := db.QueryRow(context.Background(), `
-        SELECT COUNT(*) FROM forums WHERE slug = $1`,
+        SELECT slug FROM forums WHERE slug = $1 LIMIT 1`,
         forumSlug,
-    ).Scan(&forumCount)
+    ).Scan(&forumSlug)
     if err != nil {
-        return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-    }
-    if forumCount == 0 {
         return echo.NewHTTPError(http.StatusNotFound, "Forum was not found")
     }
 
@@ -97,16 +94,24 @@ func ThreadList(c echo.Context) error {
     if err != nil {
         since = utils.GetSpecialDate(desc)
     }
-    rows, err := db.Query(context.Background(), `
-        SELECT author, created, forum, id, message, slug, title, votes FROM threads
-        WHERE forum = $1 AND CASE WHEN $3 THEN created <= $2 ELSE created >= $2 END
-        ORDER BY
-            CASE WHEN $3 THEN created END DESC,
-            created ASC
-        LIMIT $4`,
-        forumSlug, since, desc, limit,
-    )
-
+    var rows pgx.Rows
+    if desc {
+        rows, err = db.Query(context.Background(), `
+            SELECT author, created, forum, id, message, slug, title, votes FROM threads
+            WHERE forum = $1 AND created <= $2
+            ORDER BY created DESC
+            LIMIT $3`,
+            forumSlug, since, limit,
+        )
+    } else {
+        rows, err = db.Query(context.Background(), `
+            SELECT author, created, forum, id, message, slug, title, votes FROM threads
+            WHERE forum = $1 AND created >= $2
+            ORDER BY created ASC
+            LIMIT $3`,
+            forumSlug, since, limit,
+        )
+    }
     if err != nil {
         return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
     }
@@ -158,7 +163,7 @@ func ThreadVote(c echo.Context) error {
         return echo.NewHTTPError(http.StatusBadRequest, "abs(voice) > 1")
     }
 
-    var userId int64
+    var userId int
     err = db.QueryRow(context.Background(), `
         SELECT id, nickname FROM users WHERE nickname = $1 LIMIT 1`,
         thrVote.Nickname,
@@ -168,7 +173,7 @@ func ThreadVote(c echo.Context) error {
         return echo.NewHTTPError(http.StatusNotFound, err.Error())
     }
 
-    var prevVoice int64
+    var prevVoice int
     err = db.QueryRow(context.Background(), `
         SELECT voice FROM thread_votes WHERE thread_id = $1 AND user_id = $2 LIMIT 1`,
         thr.Id, userId,

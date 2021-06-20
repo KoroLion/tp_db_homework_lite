@@ -90,7 +90,7 @@ func ClearDB(db *pgxpool.Pool) error {
 func CreateTables(db *pgxpool.Pool) error {
 	_, err := db.Exec(context.Background(), `
         CREATE UNLOGGED TABLE IF NOT EXISTS users (
-            id BIGSERIAL PRIMARY KEY,
+            id SERIAL PRIMARY KEY,
             nickname CITEXT UNIQUE,
             fullname VARCHAR(255),
             about TEXT,
@@ -99,20 +99,20 @@ func CreateTables(db *pgxpool.Pool) error {
 		CREATE INDEX IF NOT EXISTS users_nickname ON users USING HASH (nickname);
 
         CREATE UNLOGGED TABLE IF NOT EXISTS forums (
-            id BIGSERIAL PRIMARY KEY,
+            id SERIAL PRIMARY KEY,
             user_nickname CITEXT,
             title VARCHAR(255),
             slug CITEXT UNIQUE,
-			threads BIGINT DEFAULT 0,
-			posts BIGINT DEFAULT 0,
+			threads INT DEFAULT 0,
+			posts INT DEFAULT 0,
 
 			FOREIGN KEY (user_nickname) REFERENCES users (nickname)
         );
 		CREATE INDEX IF NOT EXISTS forums_slug ON forums USING HASH (slug);
 
 		CREATE UNLOGGED TABLE IF NOT EXISTS forum_users (
-			forum_id BIGINT,
-			user_id BIGINT,
+			forum_id INT,
+			user_id INT,
 
 			UNIQUE(forum_id, user_id),
 
@@ -121,45 +121,46 @@ func CreateTables(db *pgxpool.Pool) error {
 		);
 
         CREATE UNLOGGED TABLE IF NOT EXISTS threads (
-            id BIGSERIAL PRIMARY KEY,
+            id SERIAL PRIMARY KEY,
             forum CITEXT,
             title VARCHAR(255),
             author CITEXT,
             message TEXT,
             created TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            votes BIGINT DEFAULT 0,
+            votes INT DEFAULT 0,
             slug CITEXT,
 
 			FOREIGN KEY (forum) REFERENCES forums (slug),
 			FOREIGN KEY (author) REFERENCES users (nickname)
         );
 		CREATE INDEX IF NOT EXISTS threads_slug ON threads USING HASH (slug);
+		CREATE INDEX IF NOT EXISTS threads_forum_created ON threads (forum, created);
 
         CREATE UNLOGGED TABLE IF NOT EXISTS posts (
-            id BIGSERIAL PRIMARY KEY,
-            parent BIGINT,
-			path BIGINT[],
+            id SERIAL PRIMARY KEY,
+            parent INT,
+			path INT[],
             author CITEXT,
             message TEXT,
             is_edited BOOLEAN DEFAULT false,
             forum CITEXT,
-            thread BIGINT,
+            thread INT,
             created TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 
 			FOREIGN KEY (author) REFERENCES users (nickname),
 			FOREIGN KEY (forum) REFERENCES forums (slug),
 			FOREIGN KEY (thread) REFERENCES threads (id)
         );
+		CREATE INDEX IF NOT EXISTS post_thread ON posts (thread);
 		CREATE INDEX IF NOT EXISTS post_thread_id ON posts (thread, id);
 		CREATE INDEX IF NOT EXISTS post_thread_path ON posts (thread, path);
-		CREATE INDEX IF NOT EXISTS post_thread_path2_parent ON posts (thread, (path[2]), parent);
-		CREATE INDEX IF NOT EXISTS post_thread_path2 ON posts (thread, (path[2]));
+		CREATE INDEX IF NOT EXISTS post_thread_parent_path2 ON posts (thread, parent, (path[2]));
 
 		CREATE UNLOGGED TABLE IF NOT EXISTS thread_votes (
-			id BIGSERIAL PRIMARY KEY,
-			thread_id BIGINT,
-			user_id BIGINT,
-			voice BIGINT,
+			id SERIAL PRIMARY KEY,
+			thread_id INT,
+			user_id INT,
+			voice INT,
 
 			FOREIGN KEY (thread_id) REFERENCES threads (id),
 			FOREIGN KEY (user_id) REFERENCES users (id)

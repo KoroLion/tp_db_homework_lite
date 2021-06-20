@@ -24,11 +24,11 @@ func main() {
 	}
 	defer db.Close()
 
-	/*err = utils.ClearDB(db)
+	err = utils.ClearDB(db)
 	if err != nil {
 		log.Println(err)
 		return
-	}*/
+	}
 	err = utils.CreateTables(db)
 	if err != nil {
 		log.Println(err)

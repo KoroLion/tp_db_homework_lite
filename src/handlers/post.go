@@ -173,22 +173,24 @@ func PostList(c echo.Context) error {
         since = 0
     }
 
+    var forumSlug string
     threadSlug := c.Param("slug_or_id")
     threadId, err := strconv.Atoi(threadSlug)
-    if err != nil {
-        threadId = 0
+    if err == nil {
+        err = db.QueryRow(context.Background(), `
+            SELECT forum FROM threads WHERE id = $1 LIMIT 1`,
+            threadId,
+        ).Scan(&forumSlug)
+    } else {
+        err = db.QueryRow(context.Background(), `
+            SELECT id, forum FROM threads WHERE slug = $1 LIMIT 1`,
+            threadSlug,
+        ).Scan(&threadId, &forumSlug)
     }
-
-    var forumSlug string
-    err = db.QueryRow(context.Background(), `
-        SELECT id, forum FROM threads WHERE slug = $1 OR id = $2 LIMIT 1`,
-        threadSlug, threadId,
-    ).Scan(&threadId, &forumSlug)
     if err != nil {
         return echo.NewHTTPError(http.StatusNotFound, "Thread was not found!")
     }
 
-    posts := make([]models.Post, 0)
     sinceClause := ""
     hasSince := since > 0
     sinceStr := strconv.Itoa(since)
@@ -220,7 +222,7 @@ func PostList(c echo.Context) error {
             )
         } else if sort == "parent_tree" {
             if (hasSince) {
-                sinceClause = " AND (path[2] < (SELECT path[2] FROM posts WHERE id = " + sinceStr + ")) "
+                sinceClause = " AND path[2] < (SELECT path[2] FROM posts WHERE id = " + sinceStr + ") "
             }
             rows, err = db.Query(context.Background(), `
                 SELECT author, created, forum, id, message, thread, parent
@@ -282,6 +284,8 @@ func PostList(c echo.Context) error {
         return echo.NewHTTPError(http.StatusNotFound, err.Error())
     }
     defer rows.Close()
+
+    posts := make([]models.Post, 0)
     for rows.Next() {
         post := models.Post{}
         post.Forum = forumSlug
