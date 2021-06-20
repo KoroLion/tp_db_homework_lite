@@ -220,7 +220,7 @@ func PostList(c echo.Context) error {
                     SELECT id FROM posts
                     WHERE thread = $1 AND parent = 0
                         AND
-                        (($3 = 0) OR (path[2] < (SELECT path[2] FROM posts WHERE id = $3))
+                        (($3 = 0) OR (path[2] < (SELECT path[2] FROM posts WHERE id = $3)))
                     ORDER BY id DESC
                     LIMIT $2
                 )
