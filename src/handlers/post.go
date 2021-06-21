@@ -2,14 +2,13 @@ package handlers
 
 import (
     "fmt"
-    "context"
     "strconv"
     "net/http"
     "encoding/json"
     "strings"
 
     "github.com/labstack/echo/v4"
-    "github.com/jackc/pgx/v4"
+    "github.com/jackc/pgx"
 
     "tp_db_homework/src/models"
     "tp_db_homework/src/utils"
@@ -25,7 +24,7 @@ func PostCreate(c echo.Context) error {
     }
 
     var forumSlug string
-    err = db.QueryRow(context.Background(), `
+    err = db.QueryRow(`
         SELECT id, forum FROM threads WHERE slug = $1 OR id = $2`,
         threadSlug, threadId,
     ).Scan(&threadId, &forumSlug)
@@ -41,7 +40,7 @@ func PostCreate(c echo.Context) error {
     }
 
     var forumId int
-    err = db.QueryRow(context.Background(), `
+    err = db.QueryRow(`
         UPDATE forums SET posts = posts + $2 WHERE slug = $1
         RETURNING id`,
         forumSlug, len(posts),
@@ -60,7 +59,7 @@ func PostCreate(c echo.Context) error {
 
         if post.Parent != 0 {
             var parentThread int
-            err := db.QueryRow(context.Background(), `
+            err := db.QueryRow(`
                 SELECT thread FROM posts WHERE id = $1`,
                 post.Parent,
             ).Scan(&parentThread)
@@ -70,7 +69,7 @@ func PostCreate(c echo.Context) error {
         }
 
         var authorId int
-        err := db.QueryRow(context.Background(), `
+        err := db.QueryRow(`
             SELECT id, nickname FROM users WHERE nickname = $1`,
             post.Author,
         ).Scan(&authorId, &post.Author)
@@ -94,11 +93,11 @@ func PostCreate(c echo.Context) error {
         newPosts = append(newPosts, post)
     }
 
-    tx, err := db.Begin(context.Background())
+    tx, err := db.Begin()
     if err != nil {
         return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
     }
-    defer tx.Rollback(context.Background())
+    defer tx.Rollback()
     if len(queryValues) > 0 {
         query := fmt.Sprintf(`
             INSERT INTO posts (author, message, thread, forum, parent)
@@ -107,9 +106,9 @@ func PostCreate(c echo.Context) error {
             queryValues,
         )
 
-        rows, err := tx.Query(context.Background(), query, queryParams...)
+        rows, err := tx.Query(query, queryParams...)
         if err != nil {
-            tx.Rollback(context.Background())
+            tx.Rollback()
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
         }
         curPostInd := 0
@@ -139,13 +138,13 @@ func PostCreate(c echo.Context) error {
             ON CONFLICT DO NOTHING`,
             queryValues,
         )
-        _, err = tx.Exec(context.Background(), query, queryParams...)
+        _, err = tx.Exec(query, queryParams...)
         if err != nil {
-            tx.Rollback(context.Background())
+            tx.Rollback()
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
         }
     }
-    tx.Commit(context.Background())
+    tx.Commit()
 
     return c.JSON(http.StatusCreated, newPosts)
 }
@@ -177,12 +176,12 @@ func PostList(c echo.Context) error {
     threadSlug := c.Param("slug_or_id")
     threadId, err := strconv.Atoi(threadSlug)
     if err == nil {
-        err = db.QueryRow(context.Background(), `
+        err = db.QueryRow(`
             SELECT forum FROM threads WHERE id = $1 LIMIT 1`,
             threadId,
         ).Scan(&forumSlug)
     } else {
-        err = db.QueryRow(context.Background(), `
+        err = db.QueryRow(`
             SELECT id, forum FROM threads WHERE slug = $1 LIMIT 1`,
             threadSlug,
         ).Scan(&threadId, &forumSlug)
@@ -191,93 +190,47 @@ func PostList(c echo.Context) error {
         return echo.NewHTTPError(http.StatusNotFound, "Thread was not found!")
     }
 
-    sinceClause := ""
     hasSince := since > 0
-    sinceStr := strconv.Itoa(since)
-    var rows pgx.Rows
+    var rows *pgx.Rows
     if desc {
         if sort == "flat" {
             if (hasSince) {
-                sinceClause = " AND id < " + sinceStr + " "
+                rows, err = db.Query("post_list_desc_flat_since", threadId, limit, since)
+            } else {
+                rows, err = db.Query("post_list_desc_flat", threadId, limit)
             }
-            rows, err = db.Query(context.Background(), `
-                SELECT author, created, forum, id, message, thread, parent
-                FROM posts
-                WHERE thread = $1` + sinceClause + `
-                ORDER BY id DESC
-                LIMIT $2`,
-                threadId, limit,
-            )
         } else if sort == "tree" {
             if (hasSince) {
-                sinceClause = " AND path < (SELECT path FROM posts WHERE id = " + sinceStr + ") "
+                rows, err = db.Query("post_list_desc_tree_since", threadId, limit, since)
+            } else {
+                rows, err = db.Query("post_list_desc_tree", threadId, limit)
             }
-            rows, err = db.Query(context.Background(), `
-                SELECT author, created, forum, id, message, thread, parent
-                FROM posts
-                WHERE thread = $1` + sinceClause + `
-                ORDER BY path DESC
-                LIMIT $2`,
-                threadId, limit,
-            )
         } else if sort == "parent_tree" {
             if (hasSince) {
-                sinceClause = " AND path[2] < (SELECT path[2] FROM posts WHERE id = " + sinceStr + ") "
+                rows, err = db.Query("post_list_desc_parent_tree_since", threadId, limit, since)
+            } else {
+                rows, err = db.Query("post_list_desc_parent_tree", threadId, limit)
             }
-            rows, err = db.Query(context.Background(), `
-                SELECT author, created, forum, id, message, thread, parent
-                FROM posts
-                WHERE path[2] IN (
-                    SELECT id FROM posts
-                    WHERE thread = $1 AND parent = 0` + sinceClause + `
-                    ORDER BY id DESC
-                    LIMIT $2
-                )
-                ORDER BY path[2] DESC, path ASC`,
-                threadId, limit,
-            )
         }
     } else {
         if sort == "flat" {
             if (hasSince) {
-                sinceClause = " AND id > " + sinceStr + " "
+                rows, err = db.Query("post_list_asc_flat_since", threadId, limit, since)
+            } else {
+                rows, err = db.Query("post_list_asc_flat", threadId, limit)
             }
-            rows, err = db.Query(context.Background(), `
-                SELECT author, created, forum, id, message, thread, parent
-                FROM posts
-                WHERE thread = $1 ` + sinceClause + `
-                ORDER BY id ASC
-                LIMIT $2`,
-                threadId, limit,
-            )
         } else if sort == "tree" {
             if (hasSince) {
-                sinceClause = "AND path > (SELECT path FROM posts WHERE id = " + sinceStr + ") "
+                rows, err = db.Query("post_list_asc_tree_since", threadId, limit, since)
+            } else {
+                rows, err = db.Query("post_list_asc_tree", threadId, limit)
             }
-            rows, err = db.Query(context.Background(), `
-                SELECT author, created, forum, id, message, thread, parent
-                FROM posts
-                WHERE thread = $1 ` + sinceClause + `
-                ORDER BY path ASC
-                LIMIT $2`,
-                threadId, limit,
-            )
         } else if sort == "parent_tree" {
             if (hasSince) {
-                sinceClause = "AND path[2] > (SELECT path[2] FROM posts WHERE id = " + sinceStr + ") "
+                rows, err = db.Query("post_list_asc_parent_tree_since", threadId, limit, since)
+            } else {
+                rows, err = db.Query("post_list_asc_parent_tree", threadId, limit)
             }
-            rows, err = db.Query(context.Background(), `
-                SELECT author, created, forum, id, message, thread, parent
-                FROM posts
-                WHERE path[2] IN (
-                    SELECT id FROM posts
-                    WHERE thread = $1 AND parent = 0 ` + sinceClause + `
-                    ORDER BY id ASC
-                    LIMIT $2
-                )
-                ORDER BY path ASC`,
-                threadId, limit,
-            )
         }
     }
     if err != nil {
@@ -312,7 +265,7 @@ func PostDetails(c echo.Context) error {
         return echo.NewHTTPError(http.StatusBadRequest, err.Error())
     }
 
-    err = db.QueryRow(context.Background(), `
+    err = db.QueryRow(`
         SELECT parent, author, created, forum, id, message, thread, is_edited
         FROM posts
         WHERE id = $1
@@ -326,7 +279,7 @@ func PostDetails(c echo.Context) error {
 
     if utils.StringInList("user", related) {
         author := models.User{}
-        err = db.QueryRow(context.Background(), `
+        err = db.QueryRow(`
             SELECT about, email, fullname, nickname
             FROM users
             WHERE nickname = $1
@@ -341,7 +294,7 @@ func PostDetails(c echo.Context) error {
 
     if utils.StringInList("thread", related) {
         thread := models.Thread{}
-        err = db.QueryRow(context.Background(), `
+        err = db.QueryRow(`
             SELECT author, created, forum, id, message, slug, title, votes
             FROM threads
             WHERE id = $1
@@ -356,7 +309,7 @@ func PostDetails(c echo.Context) error {
 
     if utils.StringInList("forum", related) {
         forum := models.Forum{}
-        err = db.QueryRow(context.Background(), `
+        err = db.QueryRow(`
             SELECT posts, slug, threads, title, user_nickname
             FROM forums
             WHERE slug = $1
@@ -389,7 +342,7 @@ func PostUpdate(c echo.Context) error {
         return echo.NewHTTPError(http.StatusBadRequest, err.Error())
     }
 
-    err = db.QueryRow(context.Background(), `
+    err = db.QueryRow(`
         UPDATE posts SET
             message = COALESCE($2, message),
             is_edited = CASE WHEN $2 IS NOT NULL AND message != $2 THEN true ELSE false END

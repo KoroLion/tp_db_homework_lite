@@ -1,17 +1,18 @@
 package utils
 
 import (
-	"context"
-    _ "github.com/lib/pq"
+    // _ "github.com/lib/pq"
 	"github.com/labstack/echo/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx"
+	"tp_db_homework/src/statements"
     "fmt"
     "time"
+	"log"
 )
 
 type ContextAndDb struct {
 	echo.Context
-	DB *pgxpool.Pool
+	DB *pgx.ConnPool
 }
 
 func StringInList(s string, list []string) bool {
@@ -41,30 +42,30 @@ func GetSpecialDate(max bool) time.Time {
     }
 }
 
-func PostgresConnect(host string, port int, db_name string, username string, password string) (*pgxpool.Pool, error) {
-    fmt.Println("Connecting to the database!")
+func PostgresConnect(host string, port int, db_name string, username string, password string) (*pgx.ConnPool, error) {
+    log.Println("Connecting to the database!")
     dsn := fmt.Sprintf("user=%s password=%s host=%s port=%d dbname=%s sslmode=disable", username, password, host, port, db_name)
 
-	config, err := pgxpool.ParseConfig(dsn)
+	conn, err := pgx.ParseConnectionString(dsn)
 	if err != nil {
 		return nil, err
 	}
-	config.MaxConns = 8
-	db, err := pgxpool.ConnectConfig(context.Background(), config)
+	config := pgx.ConnPoolConfig{
+		ConnConfig: conn,
+		MaxConnections: 16,
+	}
+	db, err := pgx.NewConnPool(config)
 	if err != nil {
 		return nil, err
 	}
 
-	err = db.Ping(context.Background())
-	if err != nil {
-		return nil, err
-	}
-
+	statements.PostPrepare(db)
+	
 	return db, nil
 }
 
-func ClearTables(db *pgxpool.Pool) error {
-	_, err := db.Exec(context.Background(), `
+func ClearTables(db *pgx.ConnPool) error {
+	_, err := db.Exec(`
 		DELETE FROM posts;
 		DELETE FROM thread_votes;
 		DELETE FROM threads;
@@ -75,8 +76,8 @@ func ClearTables(db *pgxpool.Pool) error {
 	return err
 }
 
-func ClearDB(db *pgxpool.Pool) error {
-	_, err := db.Exec(context.Background(), `
+func ClearDB(db *pgx.ConnPool) error {
+	_, err := db.Exec(`
 		DROP TABLE IF EXISTS posts;
 		DROP TABLE IF EXISTS thread_votes;
 		DROP TABLE IF EXISTS threads;
@@ -88,8 +89,8 @@ func ClearDB(db *pgxpool.Pool) error {
     return err
 }
 
-func CreateTables(db *pgxpool.Pool) error {
-	_, err := db.Exec(context.Background(), `
+func CreateTables(db *pgx.ConnPool) error {
+	_, err := db.Exec(`
         CREATE UNLOGGED TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
             nickname CITEXT UNIQUE,

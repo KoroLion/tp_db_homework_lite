@@ -1,7 +1,6 @@
 package handlers
 
 import (
-    "context"
     "log"
     "net/http"
     "encoding/json"
@@ -27,7 +26,7 @@ func UserCreate(c echo.Context) error {
     }
 
     oldUsers := make([]models.User, 0)
-    rows1, err := db.Query(context.Background(), `
+    rows1, err := db.Query(`
         SELECT nickname, fullname, about, email FROM users WHERE nickname = $1 OR email = $2`,
         newUser.Nickname, newUser.Email,
     )
@@ -51,7 +50,7 @@ func UserCreate(c echo.Context) error {
         return c.JSON(409, oldUsers)
     }
 
-    _, err = db.Exec(context.Background(), `
+    _, err = db.Exec(`
         INSERT INTO users (nickname, fullname, about, email) VALUES ($1, $2, $3, $4)`,
         newUser.Nickname, newUser.Fullname, newUser.About, newUser.Email,
     )
@@ -69,7 +68,7 @@ func UserDetails(c echo.Context) error {
     nickname := c.Param("nickname")
 
     user := models.User{}
-    err := db.QueryRow(context.Background(), `
+    err := db.QueryRow(`
         SELECT nickname, fullname, about, email FROM users WHERE nickname = $1`,
         nickname,
     ).Scan(&user.Nickname, &user.Fullname, &user.About, &user.Email)
@@ -86,7 +85,7 @@ func UserUpdate(c echo.Context) error {
     nickname := c.Param("nickname")
 
     var count int
-    err := db.QueryRow(context.Background(), `
+    err := db.QueryRow(`
         SELECT COUNT(*) FROM users WHERE nickname = $1`,
         nickname,
     ).Scan(&count)
@@ -106,7 +105,7 @@ func UserUpdate(c echo.Context) error {
         return echo.NewHTTPError(http.StatusBadRequest, err.Error())
     }
 
-    err = db.QueryRow(context.Background(), `
+    err = db.QueryRow(`
         SELECT COUNT(*) FROM users WHERE email = $1`,
         updatedUser.Email,
     ).Scan(&count)
@@ -119,7 +118,7 @@ func UserUpdate(c echo.Context) error {
     }
 
     user := models.User{}
-    err = db.QueryRow(context.Background(), `
+    err = db.QueryRow(`
         UPDATE users SET fullname = COALESCE($2, fullname), about = COALESCE($3, about), email = COALESCE($4, email)
         WHERE nickname = $1
         RETURNING nickname, fullname, about, email`,

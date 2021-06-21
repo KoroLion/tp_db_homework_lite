@@ -1,7 +1,6 @@
 package handlers
 
 import (
-    "context"
     "strconv"
     "net/http"
     "encoding/json"
@@ -9,7 +8,7 @@ import (
     "log"
 
     "github.com/labstack/echo/v4"
-    "github.com/jackc/pgx/v4"
+    "github.com/jackc/pgx"
 
     "tp_db_homework/src/models"
     "tp_db_homework/src/utils"
@@ -28,7 +27,7 @@ func ThreadCreate(c echo.Context) error {
     }
 
     var authorId int
-    err = db.QueryRow(context.Background(), `
+    err = db.QueryRow(`
         SELECT id, nickname FROM users WHERE nickname = $1`,
         newThread.Author,
     ).Scan(&authorId, &newThread.Author)
@@ -38,7 +37,7 @@ func ThreadCreate(c echo.Context) error {
 
     if len(newThread.Slug) > 0 {
         var oldThread models.Thread
-        err = db.QueryRow(context.Background(), `
+        err = db.QueryRow(`
             SELECT id, author, created, forum, message, slug, title FROM threads WHERE slug = $1`,
             newThread.Slug,
         ).Scan(&oldThread.Id, &oldThread.Author, &oldThread.Created, &oldThread.Forum, &oldThread.Message, &oldThread.Slug, &oldThread.Title)
@@ -48,7 +47,7 @@ func ThreadCreate(c echo.Context) error {
     }
 
     var forumId int
-    err = db.QueryRow(context.Background(), `
+    err = db.QueryRow(`
         UPDATE forums SET threads = threads + 1 WHERE slug = $1
         RETURNING id, slug`,
         newThread.Forum,
@@ -57,7 +56,7 @@ func ThreadCreate(c echo.Context) error {
         return echo.NewHTTPError(http.StatusNotFound, "Forum was not found!")
     }
 
-    err = db.QueryRow(context.Background(), `
+    err = db.QueryRow(`
         INSERT INTO threads (forum, title, author, message, created, slug) VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id`,
         newThread.Forum, newThread.Title, newThread.Author, newThread.Message, newThread.Created, newThread.Slug,
@@ -67,7 +66,7 @@ func ThreadCreate(c echo.Context) error {
         return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
     }
 
-    db.Exec(context.Background(), `
+    db.Exec(`
         INSERT INTO forum_users (forum_id, user_id) VALUES ($1, $2)`,
         forumId, authorId,
     )
@@ -82,7 +81,7 @@ func ThreadList(c echo.Context) error {
     limit, _ := strconv.Atoi(c.QueryParam("limit"))
     desc, _ := strconv.ParseBool(c.QueryParam("desc"))
 
-    err := db.QueryRow(context.Background(), `
+    err := db.QueryRow(`
         SELECT slug FROM forums WHERE slug = $1 LIMIT 1`,
         forumSlug,
     ).Scan(&forumSlug)
@@ -94,9 +93,9 @@ func ThreadList(c echo.Context) error {
     if err != nil {
         since = utils.GetSpecialDate(desc)
     }
-    var rows pgx.Rows
+    var rows *pgx.Rows
     if desc {
-        rows, err = db.Query(context.Background(), `
+        rows, err = db.Query(`
             SELECT author, created, forum, id, message, slug, title, votes FROM threads
             WHERE forum = $1 AND created <= $2
             ORDER BY created DESC
@@ -104,7 +103,7 @@ func ThreadList(c echo.Context) error {
             forumSlug, since, limit,
         )
     } else {
-        rows, err = db.Query(context.Background(), `
+        rows, err = db.Query(`
             SELECT author, created, forum, id, message, slug, title, votes FROM threads
             WHERE forum = $1 AND created >= $2
             ORDER BY created ASC
@@ -141,7 +140,7 @@ func ThreadVote(c echo.Context) error {
     }
 
     thr := models.Thread{}
-    err = db.QueryRow(context.Background(), `
+    err = db.QueryRow(`
         SELECT author, created, forum, id, message, slug, title, votes
         FROM threads
         WHERE slug = $1 OR id = $2`,
@@ -164,7 +163,7 @@ func ThreadVote(c echo.Context) error {
     }
 
     var userId int
-    err = db.QueryRow(context.Background(), `
+    err = db.QueryRow(`
         SELECT id, nickname FROM users WHERE nickname = $1 LIMIT 1`,
         thrVote.Nickname,
     ).Scan(&userId, &thrVote.Nickname)
@@ -174,7 +173,7 @@ func ThreadVote(c echo.Context) error {
     }
 
     var prevVoice int
-    err = db.QueryRow(context.Background(), `
+    err = db.QueryRow(`
         SELECT voice FROM thread_votes WHERE thread_id = $1 AND user_id = $2 LIMIT 1`,
         thr.Id, userId,
     ).Scan(&prevVoice)
@@ -184,7 +183,7 @@ func ThreadVote(c echo.Context) error {
             log.Printf("No thread_votes for %d and %d", thr.Id, userId)
         }
         prevVoice = 0
-        _, err := db.Exec(context.Background(), `
+        _, err := db.Exec(`
             INSERT INTO thread_votes (thread_id, user_id, voice) VALUES ($1, $2, $3)`,
             thr.Id, userId, thrVote.Voice,
         )
@@ -193,7 +192,7 @@ func ThreadVote(c echo.Context) error {
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
         }
     } else if (prevVoice != thrVote.Voice) {
-        _, err := db.Exec(context.Background(), `
+        _, err := db.Exec(`
             UPDATE thread_votes SET voice = $3 WHERE thread_id = $1 AND user_id = $2`,
             thr.Id, userId, thrVote.Voice,
         )
@@ -204,7 +203,7 @@ func ThreadVote(c echo.Context) error {
     }
 
     if (prevVoice != thrVote.Voice) {
-        err = db.QueryRow(context.Background(), `
+        err = db.QueryRow(`
             UPDATE threads SET
                 votes = votes - $2 + $3
             WHERE id = $1
@@ -228,7 +227,7 @@ func ThreadDetails(c echo.Context) error {
         threadId = 0
     }
     thr := models.Thread{}
-    err = db.QueryRow(context.Background(), `
+    err = db.QueryRow(`
         SELECT author, created, forum, id, message, slug, title, votes FROM threads WHERE slug = $1 OR id = $2`,
         threadSlug, threadId,
     ).Scan(&thr.Author, &thr.Created, &thr.Forum, &thr.Id, &thr.Message, &thr.Slug, &thr.Title, &thr.Votes)
@@ -256,7 +255,7 @@ func ThreadUpdate(c echo.Context) error {
     }
 
     thr := models.Thread{}
-    err = db.QueryRow(context.Background(), `
+    err = db.QueryRow(`
         UPDATE threads SET title = COALESCE($3, title), message = COALESCE($4, message)
         WHERE slug = $1 OR id = $2
         RETURNING author, created, forum, id, message, slug, title, votes`,
