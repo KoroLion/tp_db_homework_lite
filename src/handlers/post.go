@@ -94,11 +94,11 @@ func PostCreate(c echo.Context) error {
         newPosts = append(newPosts, post)
     }
 
-    // tx, err := db.Begin(context.Background())
+    tx, err := db.Begin(context.Background())
     if err != nil {
         return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
     }
-    // defer tx.Rollback(context.Background())
+    defer tx.Rollback(context.Background())
     if len(queryValues) > 0 {
         query := fmt.Sprintf(`
             INSERT INTO posts (author, message, thread, forum, parent)
@@ -107,9 +107,9 @@ func PostCreate(c echo.Context) error {
             queryValues,
         )
 
-        rows, err := db.Query(context.Background(), query, queryParams...)
+        rows, err := tx.Query(context.Background(), query, queryParams...)
         if err != nil {
-            // tx.Rollback(context.Background())
+            tx.Rollback(context.Background())
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
         }
         curPostInd := 0
@@ -139,13 +139,13 @@ func PostCreate(c echo.Context) error {
             ON CONFLICT DO NOTHING`,
             queryValues,
         )
-        _, err = db.Exec(context.Background(), query, queryParams...)
+        _, err = tx.Exec(context.Background(), query, queryParams...)
         if err != nil {
-            // tx.Rollback(context.Background())
+            tx.Rollback(context.Background())
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
         }
     }
-    //tx.Commit(context.Background())
+    tx.Commit(context.Background())
 
     return c.JSON(http.StatusCreated, newPosts)
 }
