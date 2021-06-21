@@ -49,6 +49,7 @@ func PostgresConnect(host string, port int, db_name string, username string, pas
 	if err != nil {
 		return nil, err
 	}
+	config.MaxConns = 8
 	db, err := pgxpool.ConnectConfig(context.Background(), config)
 	if err != nil {
 		return nil, err
