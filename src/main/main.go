@@ -52,7 +52,7 @@ func main() {
 	} else {
 		log.Println(err)
 	}*/
-	e.Static("/api/swagger", "swagger")
+	// e.Static("/api/swagger", "swagger")
 
 	e.POST("/api/service/clear", handlers.ServiceClear)
 	e.GET("/api/service/status", handlers.ServiceStatus)

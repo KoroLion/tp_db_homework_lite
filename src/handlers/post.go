@@ -252,7 +252,7 @@ func PostList(c echo.Context) error {
             )
         } else if sort == "tree" {
             if (hasSince) {
-                sinceClause = "AND path > COALESCE((SELECT path FROM posts WHERE id = " + sinceStr + "), ARRAY[0])"
+                sinceClause = "AND path > (SELECT path FROM posts WHERE id = " + sinceStr + ") "
             }
             rows, err = db.Query(context.Background(), `
                 SELECT author, created, forum, id, message, thread, parent
@@ -264,7 +264,7 @@ func PostList(c echo.Context) error {
             )
         } else if sort == "parent_tree" {
             if (hasSince) {
-                sinceClause = "AND path[2] > COALESCE((SELECT path[2] FROM posts WHERE id = " + sinceStr + "), 0)"
+                sinceClause = "AND path[2] > (SELECT path[2] FROM posts WHERE id = " + sinceStr + ") "
             }
             rows, err = db.Query(context.Background(), `
                 SELECT author, created, forum, id, message, thread, parent
@@ -287,8 +287,7 @@ func PostList(c echo.Context) error {
 
     posts := make([]models.Post, 0)
     for rows.Next() {
-        post := models.Post{}
-        post.Forum = forumSlug
+        post := models.Post{Forum: forumSlug}
         err := rows.Scan(&post.Author, &post.Created, &post.Forum, &post.Id, &post.Message, &post.Thread, &post.Parent);
         if err != nil {
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -316,7 +315,8 @@ func PostDetails(c echo.Context) error {
     err = db.QueryRow(context.Background(), `
         SELECT parent, author, created, forum, id, message, thread, is_edited
         FROM posts
-        WHERE id = $1`,
+        WHERE id = $1
+        LIMIT 1`,
         post.Id,
     ).Scan(&post.Parent, &post.Author, &post.Created, &post.Forum, &post.Id, &post.Message, &post.Thread, &post.IsEdited)
     if err != nil {
@@ -327,7 +327,10 @@ func PostDetails(c echo.Context) error {
     if utils.StringInList("user", related) {
         author := models.User{}
         err = db.QueryRow(context.Background(), `
-            SELECT about, email, fullname, nickname FROM users WHERE nickname = $1`,
+            SELECT about, email, fullname, nickname
+            FROM users
+            WHERE nickname = $1
+            LIMIT 1`,
             post.Author,
         ).Scan(&author.About, &author.Email, &author.Fullname, &author.Nickname)
         if err != nil {
@@ -339,7 +342,10 @@ func PostDetails(c echo.Context) error {
     if utils.StringInList("thread", related) {
         thread := models.Thread{}
         err = db.QueryRow(context.Background(), `
-            SELECT author, created, forum, id, message, slug, title, votes FROM threads WHERE id = $1 LIMIT 1`,
+            SELECT author, created, forum, id, message, slug, title, votes
+            FROM threads
+            WHERE id = $1
+            LIMIT 1`,
             post.Thread,
         ).Scan(&thread.Author, &thread.Created, &thread.Forum, &thread.Id, &thread.Message, &thread.Slug, &thread.Title, &thread.Votes)
         if err != nil {
@@ -351,7 +357,10 @@ func PostDetails(c echo.Context) error {
     if utils.StringInList("forum", related) {
         forum := models.Forum{}
         err = db.QueryRow(context.Background(), `
-            SELECT posts, slug, threads, title, user_nickname FROM forums WHERE slug = $1 LIMIT 1`,
+            SELECT posts, slug, threads, title, user_nickname
+            FROM forums
+            WHERE slug = $1
+            LIMIT 1`,
             post.Forum,
         ).Scan(&forum.Posts, &forum.Slug, &forum.Threads, &forum.Title, &forum.User)
         if err != nil {
