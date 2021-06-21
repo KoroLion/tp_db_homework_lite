@@ -84,6 +84,7 @@ func ClearDB(db *pgx.ConnPool) error {
 		DROP TABLE IF EXISTS forum_users;
 		DROP TABLE IF EXISTS forums;
 		DROP TABLE IF EXISTS users;
+		DROP TABLE IF EXISTS status;
     `)
 
     return err
@@ -99,7 +100,7 @@ func CreateTables(db *pgx.ConnPool) error {
             email CITEXT UNIQUE
         );
 		CREATE INDEX IF NOT EXISTS users_nickname ON users USING HASH (nickname);
-		CREATE INDEX IF NOT EXISTS users_nickname ON users USING HASH (email);
+		CREATE INDEX IF NOT EXISTS users_email ON users USING HASH (email);
 
         CREATE UNLOGGED TABLE IF NOT EXISTS forums (
             id SERIAL PRIMARY KEY,
@@ -154,9 +155,9 @@ func CreateTables(db *pgx.ConnPool) error {
 			FOREIGN KEY (forum) REFERENCES forums (slug),
 			FOREIGN KEY (thread) REFERENCES threads (id)
         );
+		CREATE INDEX IF NOT EXISTS post_path_gin ON posts USING GIN (path);
 		CREATE INDEX IF NOT EXISTS post_thread ON posts (thread);
 		CREATE INDEX IF NOT EXISTS post_thread_id ON posts (thread, id);
-		CREATE INDEX IF NOT EXISTS post_thread_path_gin ON posts USING GIN (path);
 		CREATE INDEX IF NOT EXISTS post_thread_parent_path2 ON posts (thread, parent, (path[2]));
 
 		CREATE UNLOGGED TABLE IF NOT EXISTS thread_votes (
@@ -169,6 +170,14 @@ func CreateTables(db *pgx.ConnPool) error {
 			FOREIGN KEY (user_id) REFERENCES users (id)
 		);
 		CREATE INDEX IF NOT EXISTS thread_votes_thread_nickname ON thread_votes (thread_id, user_id);
+
+		CREATE UNLOGGED TABLE IF NOT EXISTS status (
+			users INT,
+			forums INT,
+			threads INT,
+			posts INT
+		);
+		INSERT INTO status (users, forums, threads, posts) VALUES (0, 0, 0, 0);
 
 		CREATE OR REPLACE FUNCTION update_path()
 			RETURNS TRIGGER

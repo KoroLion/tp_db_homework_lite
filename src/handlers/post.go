@@ -39,8 +39,9 @@ func PostCreate(c echo.Context) error {
         return echo.NewHTTPError(http.StatusBadRequest, err.Error())
     }
     newPosts := make([]models.Post, 0)
+    newPostsAmount := len(posts)
 
-    if len(posts) > 0 {
+    if newPostsAmount > 0 {
         tx, err := db.Begin()
         if err != nil {
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -51,7 +52,7 @@ func PostCreate(c echo.Context) error {
         err = tx.QueryRow(`
             UPDATE forums SET posts = posts + $2 WHERE slug = $1
             RETURNING id`,
-            forumSlug, len(posts),
+            forumSlug, newPostsAmount,
         ).Scan(&forumId)
         if err != nil {
             tx.Rollback()
@@ -140,6 +141,11 @@ func PostCreate(c echo.Context) error {
             queryValues,
         )
         _, err = tx.Exec(query, queryParams...)
+        if err != nil {
+            tx.Rollback()
+            return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+        }
+        _, err = tx.Exec("UPDATE status SET posts = posts + $1", newPostsAmount)
         if err != nil {
             tx.Rollback()
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())

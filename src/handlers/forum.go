@@ -52,6 +52,7 @@ func ForumCreate(c echo.Context) error {
         log.Println(err)
         return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
     }
+    db.Exec(`UPDATE status SET forums = forums + 1`)
 
     return c.JSON(http.StatusCreated, newForum)
 }

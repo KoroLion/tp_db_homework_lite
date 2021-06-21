@@ -70,6 +70,7 @@ func ThreadCreate(c echo.Context) error {
         INSERT INTO forum_users (forum_id, user_id) VALUES ($1, $2)`,
         forumId, authorId,
     )
+    _, err = db.Exec(`UPDATE status SET threads = threads + 1`)
 
     return c.JSON(http.StatusCreated, newThread)
 }
@@ -168,7 +169,6 @@ func ThreadVote(c echo.Context) error {
         thrVote.Nickname,
     ).Scan(&userId, &thrVote.Nickname)
     if err != nil {
-        log.Println("User " + thrVote.Nickname + " not found!")
         return echo.NewHTTPError(http.StatusNotFound, err.Error())
     }
 
