@@ -63,12 +63,8 @@ func ForumDetails(c echo.Context) error {
     forum := models.Forum{}
     forum.Slug = c.Param("slug")
 
-    err := db.QueryRow(`
-        SELECT slug, title, user_nickname, threads, posts
-        FROM forums
-        WHERE slug = $1`,
-        forum.Slug,
-    ).Scan(&forum.Slug, &forum.Title, &forum.User, &forum.Threads, &forum.Posts)
+    err := db.QueryRow("forum_get_by_slug", forum.Slug,
+        ).Scan(&forum.Slug, &forum.Title, &forum.User, &forum.Threads, &forum.Posts)
     if err != nil {
         return echo.NewHTTPError(http.StatusNotFound, "Forum not found")
     }
@@ -93,40 +89,22 @@ func ForumUsers(c echo.Context) error {
     since := c.QueryParam("since")
 
     var forumId int
-    err = db.QueryRow(`
-        SELECT id FROM forums WHERE slug = $1`,
-        forumSlug,
-    ).Scan(&forumId)
+    err = db.QueryRow("forum_get_id_by_slug", forumSlug).Scan(&forumId)
     if err != nil {
         return echo.NewHTTPError(http.StatusNotFound, err.Error())
     }
 
-    sinceStr := ""
-    orderStr := "ASC"
     hasSince := len(since) > 0
+    orderStr := "asc"
     if desc {
-        orderStr = "DESC"
-        if hasSince {
-            sinceStr = "AND nickname < $3"
-        }
-    } else {
-        if hasSince {
-            sinceStr = "AND nickname > $3"
-        }
+        orderStr = "desc"
     }
-    query := `
-        SELECT about, email, fullname, nickname
-        FROM forum_users fu
-            INNER JOIN users u ON u.id = fu.user_id
-        WHERE forum_id = $1 ` + sinceStr + `
-        ORDER BY nickname ` + orderStr + `
-        LIMIT $2`
 
     var rows *pgx.Rows
     if hasSince {
-        rows, err = db.Query(query, forumId, limit, since)
+        rows, err = db.Query("forum_users_" + orderStr + "_since", forumId, limit, since)
     } else {
-        rows, err = db.Query(query, forumId, limit)
+        rows, err = db.Query("forum_users_" + orderStr, forumId, limit)
     }
     if err != nil {
         return echo.NewHTTPError(http.StatusNotFound, err.Error())

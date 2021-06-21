@@ -71,10 +71,8 @@ func UserDetails(c echo.Context) error {
     nickname := c.Param("nickname")
 
     user := models.User{}
-    err := db.QueryRow(`
-        SELECT nickname, fullname, about, email FROM users WHERE nickname = $1`,
-        nickname,
-    ).Scan(&user.Nickname, &user.Fullname, &user.About, &user.Email)
+    err := db.QueryRow("user_get_by_nickname", nickname,
+        ).Scan(&user.Nickname, &user.Fullname, &user.About, &user.Email)
     if err != nil {
         return echo.NewHTTPError(http.StatusNotFound, err.Error())
     }

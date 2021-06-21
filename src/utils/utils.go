@@ -1,12 +1,10 @@
 package utils
 
 import (
-    // _ "github.com/lib/pq"
 	"github.com/labstack/echo/v4"
 	"github.com/jackc/pgx"
 	"tp_db_homework/src/statements"
     "fmt"
-    "time"
 	"log"
 )
 
@@ -33,15 +31,6 @@ func IntInList(i int, list []int) bool {
     return false
 }
 
-func GetSpecialDate(max bool) time.Time {
-    if max {
-        t, _ := time.Parse(time.RFC3339, "9999-12-31T00:00:00.000+00:00")
-        return t
-    } else {
-        return time.Time{}
-    }
-}
-
 func PostgresConnect(host string, port int, db_name string, username string, password string) (*pgx.ConnPool, error) {
     log.Println("Connecting to the database!")
     dsn := fmt.Sprintf("user=%s password=%s host=%s port=%d dbname=%s sslmode=disable", username, password, host, port, db_name)
@@ -52,7 +41,7 @@ func PostgresConnect(host string, port int, db_name string, username string, pas
 	}
 	config := pgx.ConnPoolConfig{
 		ConnConfig: conn,
-		MaxConnections: 50,
+		MaxConnections: 16,
 	}
 	db, err := pgx.NewConnPool(config)
 	if err != nil {
@@ -63,7 +52,27 @@ func PostgresConnect(host string, port int, db_name string, username string, pas
 }
 
 func PrepareQueries(db *pgx.ConnPool) error {
-	err := statements.PostPrepare(db)
+	err := statements.UserPrepare(db)
+	if err != nil {
+		return err
+	}
+
+	err = statements.ForumPrepare(db)
+	if err != nil {
+		return err
+	}
+
+	err = statements.ThreadPrepare(db)
+	if err != nil {
+		return err
+	}
+
+	err = statements.PostPrepare(db)
+	if err != nil {
+		return err
+	}
+
+	err = statements.ServicePrepare(db)
 	if err != nil {
 		return err
 	}
@@ -130,6 +139,7 @@ func CreateTables(db *pgx.ConnPool) error {
 			FOREIGN KEY (forum_id) REFERENCES forums (id),
 			FOREIGN KEY (user_id) REFERENCES users (id)
 		);
+		CREATE INDEX IF NOT EXISTS forum_users_forum_id ON forum_users (forum_id);
 
         CREATE UNLOGGED TABLE IF NOT EXISTS threads (
             id SERIAL PRIMARY KEY,
@@ -145,6 +155,7 @@ func CreateTables(db *pgx.ConnPool) error {
 			FOREIGN KEY (author) REFERENCES users (nickname)
         );
 		CREATE INDEX IF NOT EXISTS threads_slug ON threads USING HASH (slug);
+		CREATE INDEX IF NOT EXISTS threads_forum ON threads USING HASH (forum);
 		CREATE INDEX IF NOT EXISTS threads_forum_created ON threads (forum, created);
 
         CREATE UNLOGGED TABLE IF NOT EXISTS posts (

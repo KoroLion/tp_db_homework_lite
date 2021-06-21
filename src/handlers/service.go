@@ -39,9 +39,8 @@ func ServiceStatus(c echo.Context) error {
         log.Println(err1)
         return echo.NewHTTPError(http.StatusInternalServerError, err1.Error())
     }*/
-    err := db.QueryRow(`
-        SELECT users, forums, threads, posts FROM status LIMIT 1`,
-    ).Scan(&serviceStatus.UserCount, &serviceStatus.ForumCount, &serviceStatus.ThreadCount, &serviceStatus.PostCount)
+    err := db.QueryRow("service_status",
+        ).Scan(&serviceStatus.UserCount, &serviceStatus.ForumCount, &serviceStatus.ThreadCount, &serviceStatus.PostCount)
     if err != nil {
         log.Println(err)
         return echo.NewHTTPError(http.StatusInternalServerError, err.Error())

@@ -183,18 +183,12 @@ func PostList(c echo.Context) error {
     threadSlug := c.Param("slug_or_id")
     threadId, err := strconv.Atoi(threadSlug)
     if err == nil {
-        err = db.QueryRow(`
-            SELECT forum FROM threads WHERE id = $1 LIMIT 1`,
-            threadId,
-        ).Scan(&forumSlug)
+        err = db.QueryRow("thread_get_forum_by_id", threadId).Scan(&forumSlug)
     } else {
-        err = db.QueryRow(`
-            SELECT id, forum FROM threads WHERE slug = $1 LIMIT 1`,
-            threadSlug,
-        ).Scan(&threadId, &forumSlug)
+        err = db.QueryRow("thread_get_id_forum_by_slug", threadSlug).Scan(&threadId, &forumSlug)
     }
     if err != nil {
-        return echo.NewHTTPError(http.StatusNotFound, "Thread was not found!")
+        return echo.NewHTTPError(http.StatusNotFound, err.Error())
     }
 
     hasSince := since > 0
@@ -241,13 +235,8 @@ func PostDetails(c echo.Context) error {
         return echo.NewHTTPError(http.StatusBadRequest, err.Error())
     }
 
-    err = db.QueryRow(`
-        SELECT parent, author, created, forum, id, message, thread, is_edited
-        FROM posts
-        WHERE id = $1
-        LIMIT 1`,
-        post.Id,
-    ).Scan(&post.Parent, &post.Author, &post.Created, &post.Forum, &post.Id, &post.Message, &post.Thread, &post.IsEdited)
+    err = db.QueryRow("post_get_by_id", post.Id,
+        ).Scan(&post.Parent, &post.Author, &post.Created, &post.Forum, &post.Id, &post.Message, &post.Thread, &post.IsEdited)
     if err != nil {
         return echo.NewHTTPError(http.StatusNotFound, err.Error())
     }
@@ -255,13 +244,8 @@ func PostDetails(c echo.Context) error {
 
     if utils.StringInList("user", related) {
         author := models.User{}
-        err = db.QueryRow(`
-            SELECT about, email, fullname, nickname
-            FROM users
-            WHERE nickname = $1
-            LIMIT 1`,
-            post.Author,
-        ).Scan(&author.About, &author.Email, &author.Fullname, &author.Nickname)
+        err = db.QueryRow("user_get_by_nickname", post.Author,
+            ).Scan(&author.Nickname, &author.Fullname, &author.About, &author.Email)
         if err != nil {
             return echo.NewHTTPError(http.StatusNotFound, err.Error())
         }
@@ -269,14 +253,10 @@ func PostDetails(c echo.Context) error {
     }
 
     if utils.StringInList("thread", related) {
-        thread := models.Thread{}
-        err = db.QueryRow(`
-            SELECT author, created, forum, id, message, slug, title, votes
-            FROM threads
-            WHERE id = $1
-            LIMIT 1`,
-            post.Thread,
-        ).Scan(&thread.Author, &thread.Created, &thread.Forum, &thread.Id, &thread.Message, &thread.Slug, &thread.Title, &thread.Votes)
+        thread := models.Thread{Id: post.Thread}
+
+        err = db.QueryRow("thread_get_by_id", thread.Id,
+            ).Scan(&thread.Author, &thread.Created, &thread.Forum, &thread.Message, &thread.Slug, &thread.Title, &thread.Votes)
         if err != nil {
             return echo.NewHTTPError(http.StatusNotFound, err.Error())
         }
@@ -285,13 +265,8 @@ func PostDetails(c echo.Context) error {
 
     if utils.StringInList("forum", related) {
         forum := models.Forum{}
-        err = db.QueryRow(`
-            SELECT posts, slug, threads, title, user_nickname
-            FROM forums
-            WHERE slug = $1
-            LIMIT 1`,
-            post.Forum,
-        ).Scan(&forum.Posts, &forum.Slug, &forum.Threads, &forum.Title, &forum.User)
+        err = db.QueryRow("forum_get_by_slug", post.Forum,
+            ).Scan(&forum.Slug, &forum.Title, &forum.User, &forum.Threads, &forum.Posts)
         if err != nil {
             return echo.NewHTTPError(http.StatusNotFound, err.Error())
         }

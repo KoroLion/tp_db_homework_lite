@@ -82,35 +82,26 @@ func ThreadList(c echo.Context) error {
     limit, _ := strconv.Atoi(c.QueryParam("limit"))
     desc, _ := strconv.ParseBool(c.QueryParam("desc"))
 
-    err := db.QueryRow(`
-        SELECT slug FROM forums WHERE slug = $1 LIMIT 1`,
-        forumSlug,
-    ).Scan(&forumSlug)
+    err := db.QueryRow("forum_get_slug_by_slug", forumSlug).Scan(&forumSlug)
     if err != nil {
         return echo.NewHTTPError(http.StatusNotFound, "Forum was not found")
     }
 
+    hasSince := true
     since, err := time.Parse(time.RFC3339, c.QueryParam("since"))
     if err != nil {
-        since = utils.GetSpecialDate(desc)
+        hasSince = false
+    }
+
+    orderStr := "asc"
+    if desc {
+        orderStr = "desc"
     }
     var rows *pgx.Rows
-    if desc {
-        rows, err = db.Query(`
-            SELECT author, created, forum, id, message, slug, title, votes FROM threads
-            WHERE forum = $1 AND created <= $2
-            ORDER BY created DESC
-            LIMIT $3`,
-            forumSlug, since, limit,
-        )
+    if hasSince {
+        rows, err = db.Query("thread_list_" + orderStr + "_since", forumSlug, limit, since)
     } else {
-        rows, err = db.Query(`
-            SELECT author, created, forum, id, message, slug, title, votes FROM threads
-            WHERE forum = $1 AND created >= $2
-            ORDER BY created ASC
-            LIMIT $3`,
-            forumSlug, since, limit,
-        )
+        rows, err = db.Query("thread_list_" + orderStr, forumSlug, limit)
     }
     if err != nil {
         return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -233,19 +224,11 @@ func ThreadDetails(c echo.Context) error {
     thr.Slug = c.Param("slug_or_id")
     thr.Id, err = strconv.Atoi(thr.Slug)
     if err == nil {
-        err = db.QueryRow(`
-            SELECT author, created, forum, message, slug, title, votes
-            FROM threads
-            WHERE id = $1`,
-            thr.Id,
-        ).Scan(&thr.Author, &thr.Created, &thr.Forum, &thr.Message, &thr.Slug, &thr.Title, &thr.Votes)
+        err = db.QueryRow("thread_get_by_id", thr.Id,
+            ).Scan(&thr.Author, &thr.Created, &thr.Forum, &thr.Message, &thr.Slug, &thr.Title, &thr.Votes)
     } else {
-        err = db.QueryRow(`
-            SELECT author, created, forum, id, message, slug, title, votes
-            FROM threads
-            WHERE slug = $1`,
-            thr.Slug,
-        ).Scan(&thr.Author, &thr.Created, &thr.Forum, &thr.Id, &thr.Message, &thr.Slug, &thr.Title, &thr.Votes)
+        err = db.QueryRow("thread_get_by_slug", thr.Slug,
+            ).Scan(&thr.Author, &thr.Created, &thr.Forum, &thr.Id, &thr.Message, &thr.Slug, &thr.Title, &thr.Votes)
     }
     if err != nil {
         return echo.NewHTTPError(http.StatusNotFound, err.Error())

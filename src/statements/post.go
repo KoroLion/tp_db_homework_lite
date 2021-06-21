@@ -5,12 +5,21 @@ import (
 )
 
 func PostPrepare(db *pgx.ConnPool) error {
-    _, err := db.Prepare("post_list_desc_flat", `
+    _, err := db.Prepare("post_get_by_id", `
+        SELECT parent, author, created, forum, id, message, thread, is_edited
+        FROM posts
+        WHERE id = $1
+        LIMIT 1`,
+    )
+    if err != nil { return err }
+
+    _, err = db.Prepare("post_list_desc_flat", `
 		SELECT author, created, forum, id, message, thread, parent
 		FROM posts
 		WHERE thread = $1
 		ORDER BY id DESC
-		LIMIT $2`)
+		LIMIT $2`,
+    )
 	if err != nil { return err }
 
 	_, err = db.Prepare("post_list_desc_flat_since", `
@@ -18,7 +27,8 @@ func PostPrepare(db *pgx.ConnPool) error {
 		FROM posts
 		WHERE thread = $1 AND id < $3
 		ORDER BY id DESC
-		LIMIT $2`)
+		LIMIT $2`,
+    )
 	if err != nil { return err }
 
 	_, err = db.Prepare("post_list_desc_tree_since", `
