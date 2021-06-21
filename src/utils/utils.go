@@ -173,10 +173,13 @@ func CreateTables(db *pgx.ConnPool) error {
 			FOREIGN KEY (forum) REFERENCES forums (slug),
 			FOREIGN KEY (thread) REFERENCES threads (id)
         );
-		CREATE INDEX IF NOT EXISTS post_path_gin ON posts USING GIN (path);
 		CREATE INDEX IF NOT EXISTS post_thread ON posts (thread);
 		CREATE INDEX IF NOT EXISTS post_thread_id ON posts (thread, id);
 		CREATE INDEX IF NOT EXISTS post_thread_parent_path2 ON posts (thread, parent, (path[2]));
+
+		CREATE INDEX IF NOT EXISTS post_path2 on posts ((path[2]));
+		CREATE INDEX IF NOT EXISTS post_path2_path ON posts ((path[2]) DESC, path ASC);
+		CREATE INDEX IF NOT EXISTS post_path ON posts (path ASC);
 
 		CREATE UNLOGGED TABLE IF NOT EXISTS thread_votes (
 			id SERIAL PRIMARY KEY,

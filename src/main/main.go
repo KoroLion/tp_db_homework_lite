@@ -5,11 +5,11 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	"os"
+	/*"os"
 	"context"
 	"time"
 	"os/signal"
-	"syscall"
+	"syscall"*/
 
 	"tp_db_homework/src/utils"
 	"tp_db_homework/src/handlers"
@@ -65,7 +65,9 @@ func main() {
 	e.GET("/api/post/:id/details", handlers.PostDetails)
 	e.POST("/api/post/:id/details", handlers.PostUpdate)
 
-	quit := make(chan os.Signal, 1)
+	e.Start(":5000")
+
+	/*quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		err := e.Start(":5000")
@@ -82,5 +84,5 @@ func main() {
 	defer cancel()
 	if err := e.Shutdown(ctx); err != nil {
 		log.Fatal("Server shut down timeout with an error: " + err.Error())
-	}
+	}*/
 }
