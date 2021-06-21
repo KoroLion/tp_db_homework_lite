@@ -4,7 +4,6 @@ import (
 	"log"
 
 	"github.com/labstack/echo/v4"
-	// "github.com/labstack/echo/v4/middleware"
 
 	"os"
 	"context"
@@ -19,20 +18,21 @@ import (
 func main() {
 	db, err := utils.PostgresConnect("localhost", 5432, "tp_db_homework", "korolion", "qwerty123")
 	if err != nil {
-		log.Println(err)
-		return
+		log.Fatal(err)
 	}
 	defer db.Close()
 
 	err = utils.ClearDB(db)
 	if err != nil {
-		log.Println(err)
-		return
+		log.Fatal(err)
 	}
 	err = utils.CreateTables(db)
 	if err != nil {
-		log.Println(err)
-		return
+		log.Fatal(err)
+	}
+	err = utils.PrepareQueries(db)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	e := echo.New()
@@ -42,17 +42,6 @@ func main() {
 			return h(cc)
 		}
 	})
-
-	/*logFile, err := os.Create("echo.log")
-	if err == nil {
-		e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
-			Output: logFile,
-			Format: "${status} ${method} ${uri} ${latency}\n",
-		}))
-	} else {
-		log.Println(err)
-	}*/
-	// e.Static("/api/swagger", "swagger")
 
 	e.POST("/api/service/clear", handlers.ServiceClear)
 	e.GET("/api/service/status", handlers.ServiceStatus)

@@ -59,9 +59,16 @@ func PostgresConnect(host string, port int, db_name string, username string, pas
 		return nil, err
 	}
 
-	statements.PostPrepare(db)
-
 	return db, nil
+}
+
+func PrepareQueries(db *pgx.ConnPool) error {
+	err := statements.PostPrepare(db)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func ClearTables(db *pgx.ConnPool) error {
