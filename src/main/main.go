@@ -11,8 +11,8 @@ import (
 	"os/signal"
 	"syscall"*/
 
-	"tp_db_homework/src/utils"
 	"tp_db_homework/src/handlers"
+	"tp_db_homework/src/utils"
 )
 
 func main() {
@@ -36,8 +36,8 @@ func main() {
 	}
 
 	e := echo.New()
-	e.Use(func (h echo.HandlerFunc) echo.HandlerFunc {
-		return func (c echo.Context) error {
+	e.Use(func(h echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
 			cc := &utils.ContextAndDb{c, db}
 			return h(cc)
 		}

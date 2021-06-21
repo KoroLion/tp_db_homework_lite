@@ -1,11 +1,11 @@
 package utils
 
 import (
-	"github.com/labstack/echo/v4"
+	"fmt"
 	"github.com/jackc/pgx"
-	"tp_db_homework/src/statements"
-    "fmt"
+	"github.com/labstack/echo/v4"
 	"log"
+	"tp_db_homework/src/statements"
 )
 
 type ContextAndDb struct {
@@ -14,33 +14,33 @@ type ContextAndDb struct {
 }
 
 func StringInList(s string, list []string) bool {
-    for _, el := range list {
-        if s == el {
-            return true
-        }
-    }
-    return false
+	for _, el := range list {
+		if s == el {
+			return true
+		}
+	}
+	return false
 }
 
 func IntInList(i int, list []int) bool {
 	for _, el := range list {
-        if i == el {
-            return true
-        }
-    }
-    return false
+		if i == el {
+			return true
+		}
+	}
+	return false
 }
 
 func PostgresConnect(host string, port int, db_name string, username string, password string) (*pgx.ConnPool, error) {
-    log.Println("Connecting to the database!")
-    dsn := fmt.Sprintf("user=%s password=%s host=%s port=%d dbname=%s sslmode=disable", username, password, host, port, db_name)
+	log.Println("Connecting to the database!")
+	dsn := fmt.Sprintf("user=%s password=%s host=%s port=%d dbname=%s sslmode=disable", username, password, host, port, db_name)
 
 	conn, err := pgx.ParseConnectionString(dsn)
 	if err != nil {
 		return nil, err
 	}
 	config := pgx.ConnPoolConfig{
-		ConnConfig: conn,
+		ConnConfig:     conn,
 		MaxConnections: 16,
 	}
 	db, err := pgx.NewConnPool(config)
@@ -103,7 +103,7 @@ func ClearDB(db *pgx.ConnPool) error {
 		DROP TABLE IF EXISTS status;
     `)
 
-    return err
+	return err
 }
 
 func CreateTables(db *pgx.ConnPool) error {
@@ -216,5 +216,5 @@ func CreateTables(db *pgx.ConnPool) error {
 			EXECUTE PROCEDURE update_path();
     `)
 
-    return err
+	return err
 }
