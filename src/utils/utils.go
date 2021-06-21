@@ -52,7 +52,7 @@ func PostgresConnect(host string, port int, db_name string, username string, pas
 	}
 	config := pgx.ConnPoolConfig{
 		ConnConfig: conn,
-		MaxConnections: 16,
+		MaxConnections: 50,
 	}
 	db, err := pgx.NewConnPool(config)
 	if err != nil {
@@ -60,7 +60,7 @@ func PostgresConnect(host string, port int, db_name string, username string, pas
 	}
 
 	statements.PostPrepare(db)
-	
+
 	return db, nil
 }
 
@@ -99,6 +99,7 @@ func CreateTables(db *pgx.ConnPool) error {
             email CITEXT UNIQUE
         );
 		CREATE INDEX IF NOT EXISTS users_nickname ON users USING HASH (nickname);
+		CREATE INDEX IF NOT EXISTS users_nickname ON users USING HASH (email);
 
         CREATE UNLOGGED TABLE IF NOT EXISTS forums (
             id SERIAL PRIMARY KEY,
@@ -155,7 +156,7 @@ func CreateTables(db *pgx.ConnPool) error {
         );
 		CREATE INDEX IF NOT EXISTS post_thread ON posts (thread);
 		CREATE INDEX IF NOT EXISTS post_thread_id ON posts (thread, id);
-		CREATE INDEX IF NOT EXISTS post_thread_path ON posts (thread, path);
+		CREATE INDEX IF NOT EXISTS post_thread_path_gin ON posts USING GIN (path);
 		CREATE INDEX IF NOT EXISTS post_thread_parent_path2 ON posts (thread, parent, (path[2]));
 
 		CREATE UNLOGGED TABLE IF NOT EXISTS thread_votes (

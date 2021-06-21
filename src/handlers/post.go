@@ -38,74 +38,75 @@ func PostCreate(c echo.Context) error {
     if err != nil {
         return echo.NewHTTPError(http.StatusBadRequest, err.Error())
     }
-
-    var forumId int
-    err = db.QueryRow(`
-        UPDATE forums SET posts = posts + $2 WHERE slug = $1
-        RETURNING id`,
-        forumSlug, len(posts),
-    ).Scan(&forumId)
-    if err != nil {
-        return echo.NewHTTPError(http.StatusNotFound, "Forum was not found!")
-    }
-
     newPosts := make([]models.Post, 0)
-    var userIds []int
-    var queryValues string
-    var queryParams []interface{}
-    for i, post := range posts {
-        post.Thread = threadId
-        post.Forum = forumSlug
 
-        if post.Parent != 0 {
-            var parentThread int
-            err := db.QueryRow(`
-                SELECT thread FROM posts WHERE id = $1`,
-                post.Parent,
-            ).Scan(&parentThread)
-            if err != nil || post.Thread != parentThread {
-                return echo.NewHTTPError(http.StatusConflict, "Parent was not found or created in another thread!")
-            }
-        }
-
-        var authorId int
-        err := db.QueryRow(`
-            SELECT id, nickname FROM users WHERE nickname = $1`,
-            post.Author,
-        ).Scan(&authorId, &post.Author)
+    if len(posts) > 0 {
+        tx, err := db.Begin()
         if err != nil {
-            return echo.NewHTTPError(http.StatusNotFound, err.Error())
+            return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+        }
+        defer tx.Rollback()
+
+        var forumId int
+        err = tx.QueryRow(`
+            UPDATE forums SET posts = posts + $2 WHERE slug = $1
+            RETURNING id`,
+            forumSlug, len(posts),
+        ).Scan(&forumId)
+        if err != nil {
+            tx.Rollback()
+            return echo.NewHTTPError(http.StatusNotFound, "Forum was not found!")
         }
 
-        queryValues += fmt.Sprintf(
-            "($%d, $%d, $%d, $%d, $%d)",
-            i*5+1, i*5+2, i*5+3, i*5+4, i*5+5,
-        )
-        if i != len(posts) - 1 {
-            queryValues += ", "
+        var userIds []int
+        var queryValues string
+        var queryParams []interface{}
+        for i, post := range posts {
+            post.Thread = threadId
+            post.Forum = forumSlug
+
+            if post.Parent != 0 {
+                var parentThread int
+                err := db.QueryRow(`
+                    SELECT thread FROM posts WHERE id = $1`,
+                    post.Parent,
+                ).Scan(&parentThread)
+                if err != nil || post.Thread != parentThread {
+                    return echo.NewHTTPError(http.StatusConflict, "Parent was not found or created in another thread!")
+                }
+            }
+
+            var authorId int
+            err := db.QueryRow(`
+                SELECT id, nickname FROM users WHERE nickname = $1`,
+                post.Author,
+            ).Scan(&authorId, &post.Author)
+            if err != nil {
+                return echo.NewHTTPError(http.StatusNotFound, err.Error())
+            }
+
+            queryValues += fmt.Sprintf(
+                "($%d, $%d, $%d, $%d, $%d)",
+                i*5+1, i*5+2, i*5+3, i*5+4, i*5+5,
+            )
+            if i != len(posts) - 1 {
+                queryValues += ", "
+            }
+            queryParams = append(queryParams, post.Author, post.Message, post.Thread, post.Forum, post.Parent)
+
+            if !utils.IntInList(authorId, userIds) {
+                userIds = append(userIds, authorId)
+            }
+
+            newPosts = append(newPosts, post)
         }
-        queryParams = append(queryParams, post.Author, post.Message, post.Thread, post.Forum, post.Parent)
 
-        if !utils.IntInList(authorId, userIds) {
-            userIds = append(userIds, authorId)
-        }
-
-        newPosts = append(newPosts, post)
-    }
-
-    tx, err := db.Begin()
-    if err != nil {
-        return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-    }
-    defer tx.Rollback()
-    if len(queryValues) > 0 {
         query := fmt.Sprintf(`
             INSERT INTO posts (author, message, thread, forum, parent)
             VALUES %s
             RETURNING id, created`,
             queryValues,
         )
-
         rows, err := tx.Query(query, queryParams...)
         if err != nil {
             tx.Rollback()
@@ -118,8 +119,8 @@ func PostCreate(c echo.Context) error {
         }
         rows.Close()
 
-        var queryValues string
-        var queryParams []interface{}
+        queryValues = ""
+        queryParams = nil
         last := len(userIds) - 1
         for i, userId := range userIds {
             queryValues += fmt.Sprintf(
@@ -143,8 +144,8 @@ func PostCreate(c echo.Context) error {
             tx.Rollback()
             return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
         }
+        tx.Commit()
     }
-    tx.Commit()
 
     return c.JSON(http.StatusCreated, newPosts)
 }
@@ -192,46 +193,15 @@ func PostList(c echo.Context) error {
 
     hasSince := since > 0
     var rows *pgx.Rows
-    if desc {
-        if sort == "flat" {
-            if (hasSince) {
-                rows, err = db.Query("post_list_desc_flat_since", threadId, limit, since)
-            } else {
-                rows, err = db.Query("post_list_desc_flat", threadId, limit)
-            }
-        } else if sort == "tree" {
-            if (hasSince) {
-                rows, err = db.Query("post_list_desc_tree_since", threadId, limit, since)
-            } else {
-                rows, err = db.Query("post_list_desc_tree", threadId, limit)
-            }
-        } else if sort == "parent_tree" {
-            if (hasSince) {
-                rows, err = db.Query("post_list_desc_parent_tree_since", threadId, limit, since)
-            } else {
-                rows, err = db.Query("post_list_desc_parent_tree", threadId, limit)
-            }
-        }
+    orderStr := "asc"
+    if (desc) {
+        orderStr = "desc"
+    }
+    queryStr := "post_list_" + orderStr + "_" + sort
+    if (hasSince) {
+        rows, err = db.Query(queryStr + "_since", threadId, limit, since)
     } else {
-        if sort == "flat" {
-            if (hasSince) {
-                rows, err = db.Query("post_list_asc_flat_since", threadId, limit, since)
-            } else {
-                rows, err = db.Query("post_list_asc_flat", threadId, limit)
-            }
-        } else if sort == "tree" {
-            if (hasSince) {
-                rows, err = db.Query("post_list_asc_tree_since", threadId, limit, since)
-            } else {
-                rows, err = db.Query("post_list_asc_tree", threadId, limit)
-            }
-        } else if sort == "parent_tree" {
-            if (hasSince) {
-                rows, err = db.Query("post_list_asc_parent_tree_since", threadId, limit, since)
-            } else {
-                rows, err = db.Query("post_list_asc_parent_tree", threadId, limit)
-            }
-        }
+        rows, err = db.Query(queryStr, threadId, limit)
     }
     if err != nil {
         return echo.NewHTTPError(http.StatusNotFound, err.Error())

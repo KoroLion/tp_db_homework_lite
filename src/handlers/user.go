@@ -27,7 +27,9 @@ func UserCreate(c echo.Context) error {
 
     oldUsers := make([]models.User, 0)
     rows1, err := db.Query(`
-        SELECT nickname, fullname, about, email FROM users WHERE nickname = $1 OR email = $2`,
+        SELECT nickname, fullname, about, email
+        FROM users
+        WHERE nickname = $1 OR email = $2`,
         newUser.Nickname, newUser.Email,
     )
     if err != nil {

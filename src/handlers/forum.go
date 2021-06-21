@@ -7,6 +7,7 @@ import (
     "strconv"
 
     "github.com/labstack/echo/v4"
+    "github.com/jackc/pgx"
 
     "tp_db_homework/src/models"
     "tp_db_homework/src/utils"
@@ -24,7 +25,9 @@ func ForumCreate(c echo.Context) error {
     }
 
     err = db.QueryRow(`
-        SELECT nickname FROM users WHERE nickname = $1`,
+        SELECT nickname
+        FROM users
+        WHERE nickname = $1`,
         newForum.User,
     ).Scan(&newForum.User)
     if err != nil {
@@ -32,7 +35,9 @@ func ForumCreate(c echo.Context) error {
     }
 
     err = db.QueryRow(`
-        SELECT title, user_nickname, slug FROM forums WHERE slug = $1`,
+        SELECT title, user_nickname, slug
+        FROM forums
+        WHERE slug = $1`,
         newForum.Slug,
     ).Scan(&newForum.Title, &newForum.User, &newForum.Slug)
     if err == nil {
@@ -58,7 +63,9 @@ func ForumDetails(c echo.Context) error {
     forum.Slug = c.Param("slug")
 
     err := db.QueryRow(`
-        SELECT slug, title, user_nickname, threads, posts FROM forums WHERE slug = $1`,
+        SELECT slug, title, user_nickname, threads, posts
+        FROM forums
+        WHERE slug = $1`,
         forum.Slug,
     ).Scan(&forum.Slug, &forum.Title, &forum.User, &forum.Threads, &forum.Posts)
     if err != nil {
@@ -93,24 +100,33 @@ func ForumUsers(c echo.Context) error {
         return echo.NewHTTPError(http.StatusNotFound, err.Error())
     }
 
-    rows, err := db.Query(`
+    sinceStr := ""
+    orderStr := "ASC"
+    hasSince := len(since) > 0
+    if desc {
+        orderStr = "DESC"
+        if hasSince {
+            sinceStr = "AND nickname < $3"
+        }
+    } else {
+        if hasSince {
+            sinceStr = "AND nickname > $3"
+        }
+    }
+    query := `
         SELECT about, email, fullname, nickname
         FROM forum_users fu
             INNER JOIN users u ON u.id = fu.user_id
-        WHERE
-            forum_id = $1
-            AND
-            (
-                CASE WHEN $3 THEN nickname < $4 ELSE nickname > $4 END
-                OR
-                LENGTH($4) = 0
-            )
-        ORDER BY
-            CASE WHEN $3 THEN nickname END DESC,
-            nickname ASC
-        LIMIT $2`,
-        forumId, limit, desc, since,
-    )
+        WHERE forum_id = $1 ` + sinceStr + `
+        ORDER BY nickname ` + orderStr + `
+        LIMIT $2`
+
+    var rows *pgx.Rows
+    if hasSince {
+        rows, err = db.Query(query, forumId, limit, since)
+    } else {
+        rows, err = db.Query(query, forumId, limit)
+    }
     if err != nil {
         return echo.NewHTTPError(http.StatusNotFound, err.Error())
     }
