@@ -4,12 +4,7 @@ import (
 	"log"
 
 	"github.com/labstack/echo/v4"
-
-	/*"os"
-	"context"
-	"time"
-	"os/signal"
-	"syscall"*/
+    "github.com/labstack/echo-contrib/prometheus"
 
 	"tp_db_homework/src/handlers"
 	"tp_db_homework/src/utils"
@@ -22,10 +17,6 @@ func main() {
 	}
 	defer db.Close()
 
-	/*err = utils.ClearDB(db)
-	if err != nil {
-		log.Fatal(err)
-	}*/
 	err = utils.CreateTables(db)
 	if err != nil {
 		log.Fatal(err)
@@ -42,6 +33,9 @@ func main() {
 			return h(cc)
 		}
 	})
+    
+    p := prometheus.NewPrometheus("echo", nil)
+    p.Use(e)
 
 	e.POST("/api/service/clear", handlers.ServiceClear)
 	e.GET("/api/service/status", handlers.ServiceStatus)
